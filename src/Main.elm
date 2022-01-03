@@ -582,7 +582,7 @@ main =
             Cmd.batch [ Random.generate GotUUID <| Random.int 0 Random.maxInt, PeerPort.makePeer "" ]
     in
     Browser.element
-        { init = \flags -> ( initialModel, initCmd )
+        { init = \_ -> ( initialModel, initCmd )
         , view = view
         , update = update
         , subscriptions = subscriptions

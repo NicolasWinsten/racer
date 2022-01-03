@@ -1,7 +1,27 @@
-port module PeerPort exposing (..)
+port module PeerPort exposing
+    ( PeersMsg(..)
+    , gameFinish
+    , gameInfo
+    , gameStarted
+    , initPeer
+    , makePeer
+    , newGame
+    , peerConnect
+    , peerDisconnect
+    , receiveDataFromJS
+    , seedInfo
+    , sendData
+    , titleReach
+    )
 
 import Json.Decode as Decode exposing (Decoder, Value, decodeValue, field)
 import Json.Encode as Encode
+
+
+
+{-
+   The below code deals with sending/receiving messages from PeerJS and Javascript
+-}
 
 
 port sendData : Value -> Cmd msg
@@ -10,6 +30,8 @@ port sendData : Value -> Cmd msg
 port receiveData : (Value -> msg) -> Sub msg
 
 
+{-| subscription for any data coming in from javascript, in this case PeerJS info
+-}
 receiveDataFromJS : Sub PeersMsg
 receiveDataFromJS =
     let
@@ -28,6 +50,7 @@ receiveDataFromJS =
 
 
 type alias Peer =
+    -- info about a game's player that is sent to new connecting players
     { uuid : Int, username : String, isHost : Bool, lastDest : String, finished : Bool }
 
 
@@ -37,12 +60,12 @@ type alias Info =
 
 
 type PeersMsg
-    = SeedInfo Int String
+    = SeedInfo Int String -- num destinations, seed string
     | GameStart String
-    | TitleReach Int String
+    | TitleReach Int String -- uuid, title
     | GameFinish Int (List String) Int -- uuid path time
-    | PeerConnect String Int
-    | PeerDisconnect Int
+    | PeerConnect String Int -- username, uuid
+    | PeerDisconnect Int -- uuid
     | HostLost String
     | HostWantsNewGame String
     | IdGenerated String
@@ -133,22 +156,17 @@ dataDecoder =
     Decode.oneOf decoders
 
 
-
-{- create this users Peer. the Peers id will be sent back in receivesId sub -}
-
-
+{-| create this users Peer. the Peers id will be sent back in receivesId sub
+-}
 port makePeer : String -> Cmd msg
 
 
 type alias Init =
+    -- info to initialize the peer socket with
     { isHost : Bool, connectId : String, username : String, uuid : Int }
 
 
 port initPeer : Init -> Cmd msg
-
-
-
-{- send a seed string to peers to update their title list -}
 
 
 createMsg header =

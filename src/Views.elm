@@ -9,6 +9,12 @@ import Html.Parser as Parser exposing (Node(..))
 import Model exposing (..)
 
 
+
+{-
+   This is where I keep all the ugly view code
+-}
+
+
 {-| add these styles to an element for a hover tooltip
 -}
 toolTipStyles bodyText =

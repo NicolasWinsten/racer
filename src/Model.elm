@@ -8,7 +8,7 @@ import Time
 
 
 
-{- destination represents a wikipage -}
+{- Model and Msg types, along with some other helper types -}
 
 
 type alias Destination =

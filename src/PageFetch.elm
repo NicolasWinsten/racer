@@ -9,6 +9,12 @@ import Maybe
 import Result
 
 
+
+{-
+   This module provides functionality for fetching the content of wikipages
+-}
+
+
 type FetchResult
     = FetchResult (Result Http.Error PageHtml)
 
@@ -43,10 +49,8 @@ getPage title =
     requestPage title |> Cmd.map content
 
 
-
-{--convert the api parse result to a parsed DOM-}
-
-
+{-| convert the api parse result to a parsed Node
+-}
 content : FetchResult -> Result Http.Error PageContent
 content (FetchResult res) =
     case res of
@@ -71,6 +75,8 @@ content (FetchResult res) =
             Err error
 
 
+{-| try and pull out the short description from page content
+-}
 extractShortDesc : Parser.Node -> Maybe String
 extractShortDesc node =
     case node of
@@ -85,12 +91,14 @@ extractShortDesc node =
                 Nothing
 
         Element _ _ children ->
-            List.foldr maybeFirst Nothing <| List.map extractShortDesc children
+            List.foldr firstMaybe Nothing <| List.map extractShortDesc children
 
         Comment _ ->
             Nothing
 
 
+{-| try and pull out the first image in the infobox of a wikipage
+-}
 grabImg : Parser.Node -> Maybe Parser.Node
 grabImg wikipage =
     let

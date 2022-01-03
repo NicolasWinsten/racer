@@ -10,6 +10,12 @@ import Html.Parser.Util
 import Random
 
 
+
+{-
+   Some helper functions to get stuff done
+-}
+
+
 strToSeed : String -> Random.Seed
 strToSeed s =
     let
@@ -223,8 +229,8 @@ getClass attrs =
 
 {-| monoidal combining method for Maybes
 -}
-maybeFirst : Maybe a -> Maybe a -> Maybe a
-maybeFirst left right =
+firstMaybe : Maybe a -> Maybe a -> Maybe a
+firstMaybe left right =
     case left of
         Nothing ->
             right
