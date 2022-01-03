@@ -25,16 +25,22 @@ initialModel =
     { window = PreGame, gameState = gameState, dests = [], loadingDests = [], options = options, peers = Dict.empty, seedChange = "", gameStarted = False }
 
 
+{-| call getPage when user clicks on a wikilink
+-}
 getPage : String -> Cmd Msg
 getPage title =
     Cmd.map (GotPage title) <| PageFetch.getPage title
 
 
+{-| call getDescription when loading the destination pages in preview
+-}
 getDescription : String -> Cmd Msg
 getDescription title =
     Cmd.map (GotDescription title) <| PageFetch.getPage title
 
 
+{-| scroll back up to top of page
+-}
 goBackToTop : Cmd Msg
 goBackToTop =
     Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0)
@@ -43,6 +49,8 @@ goBackToTop =
 port activateTooltipsSignal : String -> Cmd msg
 
 
+{-| activate bootstrap tooltips
+-}
 activateTooltips =
     activateTooltipsSignal "This is a dummy value"
 
@@ -52,28 +60,22 @@ transition =
     Cmd.batch [ activateTooltips, goBackToTop ]
 
 
-
--- create a bootstrap Toast with the given message
-
-
+{-| create a bootstrap Toast with the given message
+-}
 port makeToast : String -> Cmd msg
-
-
-
--- activate the cute clipboard thing for copying the host id
 
 
 port activateClippySignal : String -> Cmd msg
 
 
+{-| activate the cute clipboard thing for copying the host id
+-}
 activateClippy =
     activateClippySignal "This is a dummy value"
 
 
-
-{- create the game preview and request the page descriptions, and signal peers with the seedInfo -}
-
-
+{-| create the game preview and request the page descriptions, and signal peers with the seedInfo
+-}
 createGame : Model -> ( Model, Cmd Msg )
 createGame model =
     let
@@ -99,6 +101,8 @@ createGame model =
     )
 
 
+{-| transition to the gameplay and signal peers that game has started
+-}
 startGame : Model -> ( Model, Cmd Msg )
 startGame model =
     case model.dests of
@@ -112,7 +116,7 @@ startGame model =
                         PeerPort.sendData <| (PeerPort.gameStarted <| model.options.username ++ " started the game")
 
                     else
-                        Cmd.none
+                        makeToast <| model.options.username ++ " started the game"
 
                 startReachSignal =
                     PeerPort.sendData <| PeerPort.titleReach model.options.uuid start.title
@@ -381,8 +385,15 @@ update msg model =
 
                             else
                                 Cmd.none
+
+                        toast =
+                            if List.member title (List.map .title model.dests) then
+                                makeToast <| peer.username ++ " found " ++ title
+
+                            else
+                                Cmd.none
                     in
-                    ( { model | peers = Dict.insert uuid updatedPeer model.peers }, hostEcho )
+                    ( { model | peers = Dict.insert uuid updatedPeer model.peers }, Cmd.batch [ hostEcho, toast ] )
 
                 Nothing ->
                     ( model, Cmd.none )
