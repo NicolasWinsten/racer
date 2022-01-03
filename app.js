@@ -6313,7 +6313,7 @@ var $elm$core$Maybe$andThen = F2(
 			return $elm$core$Maybe$Nothing;
 		}
 	});
-var $author$project$Helpers$maybeFirst = F2(
+var $author$project$Helpers$firstMaybe = F2(
 	function (left, right) {
 		if (left.$ === 1) {
 			return right;
@@ -6338,7 +6338,7 @@ var $author$project$PageFetch$extractShortDesc = function (node) {
 				var children = node.c;
 				return A3(
 					$elm$core$List$foldr,
-					$author$project$Helpers$maybeFirst,
+					$author$project$Helpers$firstMaybe,
 					$elm$core$Maybe$Nothing,
 					A2($elm$core$List$map, $author$project$PageFetch$extractShortDesc, children));
 			}
@@ -13594,7 +13594,7 @@ var $author$project$Main$main = function () {
 			]));
 	return $elm$browser$Browser$element(
 		{
-			bo: function (flags) {
+			bo: function (_v0) {
 				return _Utils_Tuple2($author$project$Main$initialModel, initCmd);
 			},
 			bB: $author$project$Main$subscriptions,
