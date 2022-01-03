@@ -427,6 +427,17 @@ view model =
                 gotToEnd player =
                     Just player.lastDest == (model.dests |> List.reverse |> List.head |> Maybe.map .title)
 
+                viewLink title =
+                    let
+                        element =
+                            Html.a [ class "hoverUnderline", href <| "https://en.wikipedia.org/wiki/" ++ title, target "_blank" ] [ text title ]
+                    in
+                    if List.member title <| List.map .title model.dests then
+                        Html.b [] [ element ]
+
+                    else
+                        element
+
                 playerList : List Peer
                 playerList =
                     you :: Dict.values model.peers
@@ -469,16 +480,10 @@ view model =
                     leaderboard "Path Length" (.path >> List.length) ((+) -1 >> String.fromInt >> (\l -> l ++ " steps"))
 
                 pathView =
+                    -- show the path of the highlighted player
                     case List.filter (.uuid >> (==) playeruuid) playerList of
                         player :: _ ->
                             let
-                                viewLink title =
-                                    if List.member title <| List.map .title model.dests then
-                                        Html.b [] [ text title ]
-
-                                    else
-                                        Html.a [ class "hoverUnderline", href <| "https://en.wikipedia.org/wiki/" ++ title, target "_blank" ] [ text title ]
-
                                 listView =
                                     player.path |> List.reverse |> List.map viewLink |> List.intersperse (rightarrow 1) |> div []
                             in
@@ -494,7 +499,7 @@ view model =
                 unfinishedPlayersView =
                     let
                         viewPlayer player =
-                            div [ class "col-3" ] [ Html.b [] [ text player.username ], Html.br [] [], text player.currentTitle ]
+                            div [ class "col-3" ] [ Html.b [] [ text player.username ], Html.br [] [], viewLink player.currentTitle ]
                     in
                     if List.length unfinishedPlayers > 0 then
                         div [ class "container.fluid" ] [ singleRow <| h3 [] [ text "unfinished players" ], div [ class "row" ] <| List.map viewPlayer unfinishedPlayers ]
