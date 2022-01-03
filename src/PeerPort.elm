@@ -28,7 +28,7 @@ receiveDataFromJS =
 
 
 type alias Peer =
-    { uuid : Int, username : String, isHost : Bool }
+    { uuid : Int, username : String, isHost : Bool, lastDest : String, finished : Bool }
 
 
 type alias Info =
@@ -44,6 +44,7 @@ type PeersMsg
     | PeerConnect String Int
     | PeerDisconnect Int
     | HostLost String
+    | HostWantsNewGame String
     | IdGenerated String
     | Error String
     | GameInfo Int Info -- directed message to peer with given uuid
@@ -60,7 +61,7 @@ uuidDecoder =
 
 peerDecoder : Decoder Peer
 peerDecoder =
-    Decode.map3 Peer uuidDecoder usernameDecoder (field "isHost" Decode.bool)
+    Decode.map5 Peer uuidDecoder usernameDecoder (field "isHost" Decode.bool) (field "lastDest" Decode.string) (field "finished" Decode.bool)
 
 
 seedInfoDecoder : Decoder PeersMsg
@@ -118,8 +119,13 @@ errorDecoder =
     Decode.map Error <| field "error" Decode.string
 
 
+hostWantsNewGame : Decoder PeersMsg
+hostWantsNewGame =
+    Decode.map HostWantsNewGame <| field "newGame" Decode.string
+
+
 decoders =
-    [ seedInfoDecoder, gameStartDecoder, titleReachDecoder, gameFinishDecoder, peerConnectDecoder, peerDisconnectDecoder, peerIdGenDecoder, gameInfoDecoder, errorDecoder, hostLostDecoder ]
+    [ seedInfoDecoder, gameStartDecoder, titleReachDecoder, gameFinishDecoder, peerConnectDecoder, peerDisconnectDecoder, peerIdGenDecoder, gameInfoDecoder, errorDecoder, hostLostDecoder, hostWantsNewGame ]
 
 
 dataDecoder : Decoder PeersMsg
@@ -174,10 +180,6 @@ peerConnect username uuid =
         Encode.object [ ( "uuid", Encode.int uuid ), ( "username", Encode.string username ) ]
 
 
-
--- TODO create Decoder and add to PeerMsg type
-
-
 peerDisconnect uuid =
     createMsg "peerDisconnect" <| Encode.object [ ( "uuid", Encode.int uuid ) ]
 
@@ -185,11 +187,17 @@ peerDisconnect uuid =
 gameInfo : Int -> Info -> Value
 gameInfo uuid info =
     let
+        encodePeer : Peer -> Value
         encodePeer peer =
-            Encode.object [ ( "uuid", Encode.int peer.uuid ), ( "username", Encode.string peer.username ), ( "isHost", Encode.bool peer.isHost ) ]
+            Encode.object [ ( "uuid", Encode.int peer.uuid ), ( "username", Encode.string peer.username ), ( "isHost", Encode.bool peer.isHost ), ( "finished", Encode.bool peer.finished ), ( "lastDest", Encode.string peer.lastDest ) ]
 
         encodeInfo =
             Encode.object [ ( "seed", Encode.string info.seed ), ( "numDestinations", Encode.int info.numDestinations ), ( "peers", Encode.list encodePeer info.peers ), ( "started", Encode.bool info.started ) ]
     in
     createMsg "gameInfo" <|
         Encode.object [ ( "uuid", Encode.int uuid ), ( "info", encodeInfo ) ]
+
+
+newGame : String -> Value
+newGame msg =
+    Encode.object [ ( "newGame", Encode.string msg ) ]

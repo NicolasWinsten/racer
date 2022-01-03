@@ -123,6 +123,39 @@ startGame model =
             ( { model | window = Bad "Can't start game with 0 destinations" }, Cmd.none )
 
 
+{-| reset the game back to Game Preview and signal peers to do the same
+-}
+reset : Model -> ( Model, Cmd Msg )
+reset model =
+    let
+        newGameState =
+            { path = [], pastDests = [], remainingDests = [], time = 0 }
+
+        signalPeers =
+            if model.options.isHost then
+                model.options.username ++ " wants a new game" |> PeerPort.newGame |> PeerPort.sendData
+
+            else
+                Cmd.none
+
+        newPeerDict =
+            let
+                resetPeer peer =
+                    { emptyPeer | username = peer.username, uuid = peer.uuid, isHost = peer.isHost }
+            in
+            Dict.map (\_ p -> resetPeer p) model.peers
+
+        resetModel =
+            { model | window = Preview, gameState = newGameState, gameStarted = False, dests = [], loadingDests = [], seedChange = "", peers = newPeerDict }
+
+        ( newModel, cmd ) =
+            createGame resetModel
+    in
+    ( newModel
+    , Cmd.batch [ cmd, signalPeers ]
+    )
+
+
 
 {- *scarface voice* say hello to my enormous update function -}
 
@@ -144,14 +177,24 @@ update msg model =
                 newLoadingDests =
                     replaceWithLoaded page model.loadingDests
 
+                allDestsLoaded =
+                    doneLoading newLoadingDests
+
                 newDests =
-                    if List.all destIsLoaded newLoadingDests then
+                    if allDestsLoaded then
                         extractLoadedDestinations newLoadingDests
 
                     else
                         model.dests
+
+                newModel =
+                    { model | dests = newDests, loadingDests = newLoadingDests }
             in
-            ( { model | dests = newDests, loadingDests = newLoadingDests }, Cmd.none )
+            if model.gameStarted && allDestsLoaded then
+                startGame newModel
+
+            else
+                ( newModel, Cmd.none )
 
         GotDescription title (Err _) ->
             ( { model | window = Bad <| "Ran into issue getting description for " ++ title }, Cmd.none )
@@ -182,22 +225,12 @@ update msg model =
 
                             else
                                 { state | path = newPath }
-
-                        signal =
-                            if isPathCompleted then
-                                Cmd.batch [ signalGameFinished, signalTitleReached ]
-
-                            else if page.title == dest.title then
-                                signalTitleReached
-
-                            else
-                                Cmd.none
                     in
                     if isPathCompleted then
-                        ( { model | window = Review model.options.uuid, gameState = newGameState }, Cmd.batch [ signal, transition ] )
+                        ( { model | window = Review model.options.uuid, gameState = newGameState }, Cmd.batch [ signalGameFinished, signalTitleReached, transition ] )
 
                     else
-                        ( { model | window = InPage page, gameState = newGameState }, Cmd.batch [ signal, transition ] )
+                        ( { model | window = InPage page, gameState = newGameState }, Cmd.batch [ signalTitleReached, transition ] )
 
                 [] ->
                     ( { model | window = Bad "Why are we out of destinations?" }, Cmd.none )
@@ -315,17 +348,32 @@ update msg model =
                             s ->
                                 makeToast s
 
+                    allDestsLoaded =
+                        doneLoading model.loadingDests
+
                     ( newModel, cmd ) =
                         startGame model
                 in
-                ( newModel, Cmd.batch [ cmd, toast ] )
+                if allDestsLoaded then
+                    ( newModel, Cmd.batch [ cmd, toast ] )
+
+                else
+                    ( { model | gameStarted = True }, toast )
 
         PeerMsg (PeerPort.TitleReach uuid title) ->
             case Dict.get uuid model.peers of
                 Just peer ->
                     let
                         updatedPeer =
-                            { peer | lastDest = title }
+                            let
+                                newLastDest =
+                                    if List.member title <| List.map .title model.dests then
+                                        title
+
+                                    else
+                                        peer.lastDest
+                            in
+                            { peer | lastDest = newLastDest, currentTitle = title }
 
                         hostEcho =
                             if model.options.isHost then
@@ -357,20 +405,35 @@ update msg model =
                         PeerPort.sendData <| PeerPort.peerConnect peerUsername peerUUID
 
                     peerList =
-                        List.map (\peer -> { username = peer.username, uuid = peer.uuid, isHost = False }) <| Dict.values model.peers
+                        List.map (\peer -> { username = peer.username, uuid = peer.uuid, isHost = False, finished = peer.finished, lastDest = peer.lastDest }) <| Dict.values model.peers
 
                     peerListWithHost =
-                        { username = model.options.username, uuid = model.options.uuid, isHost = True } :: peerList
+                        let
+                            finished =
+                                case model.window of
+                                    Review _ ->
+                                        True
+
+                                    _ ->
+                                        False
+
+                            lastDest =
+                                List.head model.gameState.pastDests |> Maybe.map .title |> Maybe.withDefault ""
+                        in
+                        { username = model.options.username, uuid = model.options.uuid, isHost = True, finished = finished, lastDest = lastDest } :: peerList
 
                     hostSendGameInfo =
                         -- echo message containing the game info tagged with the new peer's uuid
                         PeerPort.sendData <| PeerPort.gameInfo peerUUID { seed = model.options.seedStr, numDestinations = model.options.numDestinations, peers = peerListWithHost, started = model.gameStarted }
+
+                    toast =
+                        makeToast <| peerUsername ++ " joined the game"
                 in
                 if model.options.isHost then
-                    ( { model | peers = newPeerDict }, Cmd.batch [ hostSendGameInfo, hostEcho ] )
+                    ( { model | peers = newPeerDict }, Cmd.batch [ hostSendGameInfo, hostEcho, toast ] )
 
                 else
-                    ( { model | peers = newPeerDict }, Cmd.none )
+                    ( { model | peers = newPeerDict }, toast )
 
         PeerMsg (PeerPort.PeerDisconnect uuid) ->
             let
@@ -409,10 +472,27 @@ update msg model =
             case Dict.get peeruuid model.peers of
                 Just peer ->
                     let
+                        peerGotToEnd =
+                            (List.reverse >> List.head >> Maybe.map .title) model.dests == List.head path
+
                         updatedPeer =
-                            { peer | path = path, time = time }
+                            { peer | path = path, time = time, finished = True }
+
+                        toast =
+                            if peerGotToEnd then
+                                peer.username ++ " has finished!"
+
+                            else
+                                peer.username ++ " gave up"
+
+                        hostEcho =
+                            if model.options.isHost then
+                                PeerPort.sendData <| PeerPort.gameFinish peeruuid path time
+
+                            else
+                                Cmd.none
                     in
-                    ( { model | peers = Dict.insert peeruuid updatedPeer model.peers }, makeToast <| peer.username ++ " has finished!" )
+                    ( { model | peers = Dict.insert peeruuid updatedPeer model.peers }, Cmd.batch [ hostEcho, makeToast toast ] )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -420,8 +500,11 @@ update msg model =
         PeerMsg (PeerPort.GameInfo uuid info) ->
             if uuid == model.options.uuid then
                 let
+                    hostName =
+                        (List.filter .isHost >> List.head >> Maybe.map .username >> Maybe.withDefault "???") info.peers
+
                     addPeerToDict peer dict =
-                        Dict.insert peer.uuid { emptyPeer | uuid = peer.uuid, username = peer.username, isHost = peer.isHost } dict
+                        Dict.insert peer.uuid { emptyPeer | uuid = peer.uuid, username = peer.username, isHost = peer.isHost, finished = peer.finished, lastDest = peer.lastDest } dict
 
                     newPeerDict =
                         List.foldl addPeerToDict model.peers info.peers
@@ -429,10 +512,10 @@ update msg model =
                     options =
                         model.options
 
-                    newModel =
-                        { model | options = { options | seedStr = info.seed, numDestinations = info.numDestinations }, peers = newPeerDict }
+                    ( newModel, cmd ) =
+                        createGame { model | options = { options | seedStr = info.seed, numDestinations = info.numDestinations }, peers = newPeerDict }
                 in
-                createGame newModel
+                ( newModel, Cmd.batch [ cmd, makeToast <| "You joined " ++ hostName ++ "'s game" ] )
 
             else
                 ( model, Cmd.none )
@@ -452,6 +535,30 @@ update msg model =
 
         ReviewPlayer uuid ->
             ( { model | window = Review uuid }, Cmd.none )
+
+        GiveUp ->
+            let
+                peerMsg =
+                    PeerPort.sendData <| PeerPort.gameFinish model.options.uuid (List.map .title model.gameState.path) model.gameState.time
+            in
+            ( { model | window = Review model.options.uuid }, peerMsg )
+
+        ClickedNewGame ->
+            if model.options.isHost then
+                reset model
+
+            else
+                ( { model | window = Bad "Only hosts can start new games" }, Cmd.none )
+
+        PeerMsg (PeerPort.HostWantsNewGame str) ->
+            let
+                toast =
+                    makeToast str
+
+                ( newModel, cmd ) =
+                    reset model
+            in
+            ( newModel, Cmd.batch [ cmd, toast ] )
 
 
 subscriptions : Model -> Sub Msg

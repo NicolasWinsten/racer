@@ -2,7 +2,7 @@ module Views exposing (view)
 
 import Dict
 import Helpers exposing (..)
-import Html exposing (Html, br, button, div, h1, h2, h3, h5, input, node, span, text)
+import Html exposing (Html, br, button, div, h1, h2, h3, h5, input, li, node, span, text, ul)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Html.Parser as Parser exposing (Node(..))
@@ -17,6 +17,10 @@ toolTipStyles bodyText =
     , Html.Attributes.attribute "data-bs-container" "body"
     , Html.Attributes.title bodyText
     ]
+
+
+backToMyPageLink =
+    Html.small [ class "d-inline m-2", style "float" "right" ] [ text "go back to ", Html.a [ class "wikilink", href "https://nicolaswinsten.github.io" ] [ text "my page" ] ]
 
 
 {-| welcome page
@@ -94,9 +98,19 @@ viewWelcome options =
                 , br [] []
                 , button [ onClick <| ClickedJoinOrHost { isHost = False } ] [ text "Join Game" ]
                 ]
+
+        notesSection =
+            singleRow <|
+                div [ class "m-3" ]
+                    [ h3 [] [ text "Notes" ]
+                    , ul []
+                        [ li [] [ text "This game was built with Elm and PeerJS. ", Html.a [ class "wikilink", href "https://github.com/NicolasWinsten/racer" ] [ text "source code" ] ]
+                        , li [] [ text "All feedback and complaints go to nicolasd DOT winsten AT gmail DOT com" ]
+                        ]
+                    ]
     in
     div []
-        [ Html.small [ class "d-inline", style "float" "right" ] [ text "go back to ", Html.a [ href "https://nicolaswinsten.com" ] [ text "my page" ] ]
+        [ backToMyPageLink
         , div [ class "container" ]
             [ singleRow <| h1 [] [ text "Let's Race" ]
             , descSection
@@ -104,6 +118,8 @@ viewWelcome options =
             , singleRow usernameInput
             , Html.hr [] []
             , singleRow <| div [ class "container" ] [ div [ class "row" ] [ div [ class "col" ] [ hostGameSection ], div [ class "col" ] [ joinGameSection ] ] ]
+            , Html.hr [] []
+            , notesSection
             ]
         ]
 
@@ -194,8 +210,8 @@ viewPeerLocs peers =
 
 {-| view the path of titles highlighting the ones that are also destinations
 -}
-viewPath : List String -> List String -> Bool -> Html msg
-viewPath titles dests reversed =
+viewPath : List String -> List String -> Html msg
+viewPath titles dests =
     let
         toText title =
             if List.member title dests then
@@ -208,15 +224,7 @@ viewPath titles dests reversed =
             List.map toText titles
 
         withArrows =
-            let
-                arrow =
-                    if reversed then
-                        uparrow 2
-
-                    else
-                        downarrow 2
-            in
-            List.intersperse arrow titleTexts
+            List.intersperse (uparrow 2) titleTexts
     in
     div [ class "container" ] <| List.map singleRow withArrows
 
@@ -292,14 +300,14 @@ view model =
                     in
                     div [ class "container border border-2 border-dark p-2" ] ((singleRow <| h5 [] [ text "Other players" ]) :: Html.hr [] [] :: peerList)
 
-                doneLoading =
-                    List.all destIsLoaded model.loadingDests
+                allDestsLoaded =
+                    doneLoading model.loadingDests
 
                 refreshDisabled =
                     model.seedChange == model.options.seedStr
 
                 ( startBtn, refreshBtn ) =
-                    if doneLoading && model.options.isHost then
+                    if allDestsLoaded && model.options.isHost then
                         ( button [ onClick <| StartGame, class "m-2" ] [ text "Start game" ]
                         , div [ class "p-2" ]
                             [ input [ placeholder "new game seed", value model.seedChange, onInput ChangeSeedWhileInPreview ] []
@@ -342,6 +350,9 @@ view model =
                     else
                         text ""
 
+                giveUpBtn =
+                    button [ class "btn btn-outline-dark m-3", onClick GiveUp ] [ text "Give Up" ]
+
                 timeDisplay =
                     let
                         timeInSec =
@@ -372,7 +383,7 @@ view model =
                             pathTitles =
                                 List.map .title model.gameState.path
                         in
-                        viewPath pathTitles destTitles True
+                        viewPath pathTitles destTitles
 
                     else
                         viewPeerLocs <| Dict.values model.peers
@@ -381,7 +392,7 @@ view model =
                     div [ class "container-fluid pt-4" ]
                         [ div [ class "row" ]
                             [ div [ class "col-10" ] [ viewNode page.content ]
-                            , div [ class "col-2" ] [ rightSideView ]
+                            , div [ class "col-2" ] [ giveUpBtn, rightSideView ]
                             ]
                         ]
             in
@@ -395,28 +406,55 @@ view model =
                 timeInSec time =
                     time // 100
 
+                you : Peer
                 you =
-                    { emptyPeer | username = model.options.username, path = List.map .title model.gameState.path, uuid = model.options.uuid, time = model.gameState.time }
+                    { username = model.options.username
+                    , path = List.map .title model.gameState.path
+                    , uuid = model.options.uuid
+                    , time = model.gameState.time
+                    , lastDest = List.head model.gameState.pastDests |> Maybe.map .title |> Maybe.withDefault ""
+                    , isHost = model.options.isHost
+                    , finished = True
+                    , currentTitle = List.head model.gameState.path |> Maybe.map .title |> Maybe.withDefault ""
+                    }
 
+                gotToEnd player =
+                    Just player.lastDest == (model.dests |> List.reverse |> List.head |> Maybe.map .title)
+
+                playerList : List Peer
                 playerList =
                     you :: Dict.values model.peers
 
-                finishedPlayers =
-                    List.filter (.path >> List.length >> (<) 0) playerList
+                unfinishedPlayers =
+                    List.filter (.finished >> not) playerList
+
+                playersThatGotToEnd =
+                    List.filter gotToEnd playerList
+
+                playersThatGaveUp =
+                    List.filter (\p -> not (gotToEnd p) && p.finished) playerList
 
                 {- create a leaderboard of the players sorted by `f` and displaying `player |> f |> toString` -}
                 leaderboard header f toString =
                     let
                         playerView player =
-                            [ Html.a [ class "hoverUnderline", onClick <| ReviewPlayer player.uuid ] [ text player.username ], text <| " " ++ toString (f player) ]
+                            let
+                                stat =
+                                    if gotToEnd player then
+                                        toString (f player)
+
+                                    else
+                                        "DNE"
+                            in
+                            [ Html.a [ class "hoverUnderline", href "#", onClick <| ReviewPlayer player.uuid ] [ text player.username ], text <| " " ++ stat ]
                                 |> span []
 
                         sortedPlayersView =
-                            List.map playerView (List.sortBy f finishedPlayers)
+                            List.map playerView <| List.sortBy f playersThatGotToEnd ++ playersThatGaveUp
                     in
-                    (h3 [] [ text header ] :: Html.hr [ class "border border-dark border-1" ] [] :: sortedPlayersView)
+                    (h3 [] [ text header ] :: Html.hr [] [] :: sortedPlayersView)
                         |> List.map singleRow
-                        |> div [ class "container border border-dark border-2 bg-light m-3", style "text-align" "center" ]
+                        |> div [ class "container border border-dark border-2 bg-light m-3 p-2", style "text-align" "center" ]
 
                 timeBoard =
                     leaderboard "Time" .time (timeInSec >> String.fromInt >> (\t -> t ++ "s"))
@@ -436,16 +474,27 @@ view model =
                                         Html.a [ class "hoverUnderline", href <| "https://en.wikipedia.org/wiki/" ++ title, target "_blank" ] [ text title ]
 
                                 listView =
-                                    List.map viewLink player.path |> List.intersperse (rightarrow 1) |> div []
+                                    player.path |> List.reverse |> List.map viewLink |> List.intersperse (rightarrow 1) |> div []
                             in
-                            if List.member player finishedPlayers then
+                            if player.finished then
                                 div [ class "container" ] [ singleRow <| h3 [] [ text <| player.username ++ "'s path" ], singleRow listView ]
 
                             else
-                                h3 [] [ text <| player.username ++ " has not finished yet" ]
+                                div [ class "container" ] [ singleRow <| h3 [] [ text <| player.username ++ " hasn't finished yet" ] ]
 
                         [] ->
                             text "Problem displaying player path"
+
+                unfinishedPlayersView =
+                    let
+                        viewPlayer player =
+                            div [ class "col-3" ] [ Html.b [] [ text player.username ], Html.br [] [], text player.currentTitle ]
+                    in
+                    if List.length unfinishedPlayers > 0 then
+                        div [ class "container.fluid" ] [ singleRow <| h3 [] [ text "unfinished players" ], div [ class "row" ] <| List.map viewPlayer unfinishedPlayers ]
+
+                    else
+                        text ""
             in
             div [ class "container" ]
                 [ div [ class "row" ]
@@ -457,6 +506,17 @@ view model =
                 , Html.br [] []
                 , Html.br [] []
                 , singleRow pathView
+                , Html.br [] []
+                , Html.br [] []
+                , unfinishedPlayersView
+                , Html.br [] []
+                , Html.br [] []
+                , singleRow <|
+                    if model.options.isHost then
+                        button [ onClick <| ClickedNewGame ] [ text "New Game" ]
+
+                    else
+                        text "Waiting on host to make a new game..."
                 ]
 
         Bad msg ->

@@ -43,6 +43,11 @@ destIsLoaded dest =
             False
 
 
+doneLoading : List LoadingDestination -> Bool
+doneLoading =
+    List.all destIsLoaded
+
+
 
 {- replace the Loading item in the list with its Loaded page -}
 
@@ -65,12 +70,12 @@ replaceWithLoaded dest loadingDests =
 
 
 type alias Peer =
-    { uuid : Int, username : String, lastDest : String, time : Int, path : List String, isHost : Bool }
+    { uuid : Int, username : String, lastDest : String, time : Int, path : List String, isHost : Bool, finished : Bool, currentTitle : String }
 
 
 emptyPeer : Peer
 emptyPeer =
-    { uuid = 0, username = "", lastDest = "", time = 0, path = [], isHost = False }
+    { uuid = 0, username = "", lastDest = "", time = 0, path = [], isHost = False, finished = False, currentTitle = "" }
 
 
 type alias Options =
@@ -104,12 +109,14 @@ type Msg
     | ClickedJoinOrHost { isHost : Bool }
     | Refresh
     | StartGame
+    | GiveUp
     | ChangeOptions Options
     | ChangeSeedWhileInPreview String
     | GoBack
     | Tick Time.Posix
     | PeerMsg PeerPort.PeersMsg
     | GotUUID Int
+    | ClickedNewGame
     | ReviewPlayer Int --uuid of player to highlight in Review window
     | NoOp
 

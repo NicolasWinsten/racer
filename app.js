@@ -519,11 +519,11 @@ function _Debug_crash_UNUSED(identifier, fact1, fact2, fact3, fact4)
 
 function _Debug_regionToString(region)
 {
-	if (region.ai.S === region.aq.S)
+	if (region.ak.W === region.as.W)
 	{
-		return 'on line ' + region.ai.S;
+		return 'on line ' + region.ak.W;
 	}
-	return 'on lines ' + region.ai.S + ' through ' + region.aq.S;
+	return 'on lines ' + region.ak.W + ' through ' + region.as.W;
 }
 
 
@@ -1857,9 +1857,9 @@ var _Platform_worker = F4(function(impl, flagDecoder, debugMetadata, args)
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.bl,
+		impl.bo,
+		impl.bD,
 		impl.bB,
-		impl.bz,
 		function() { return function() {} }
 	);
 });
@@ -2704,9 +2704,9 @@ var _VirtualDom_mapEventTuple = F2(function(func, tuple)
 var _VirtualDom_mapEventRecord = F2(function(func, record)
 {
 	return {
-		C: func(record.C),
-		aj: record.aj,
-		ag: record.ag
+		E: func(record.E),
+		al: record.al,
+		ai: record.ai
 	}
 });
 
@@ -2974,11 +2974,11 @@ function _VirtualDom_makeCallback(eventNode, initialHandler)
 		// 3 = Custom
 
 		var value = result.a;
-		var message = !tag ? value : tag < 3 ? value.a : value.C;
-		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.aj;
+		var message = !tag ? value : tag < 3 ? value.a : value.E;
+		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.al;
 		var currentEventNode = (
 			stopPropagation && event.stopPropagation(),
-			(tag == 2 ? value.b : tag == 3 && value.ag) && event.preventDefault(),
+			(tag == 2 ? value.b : tag == 3 && value.ai) && event.preventDefault(),
 			eventNode
 		);
 		var tagger;
@@ -3928,11 +3928,11 @@ var _Browser_element = _Debugger_element || F4(function(impl, flagDecoder, debug
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.bl,
+		impl.bo,
+		impl.bD,
 		impl.bB,
-		impl.bz,
 		function(sendToApp, initialModel) {
-			var view = impl.bD;
+			var view = impl.bF;
 			/**/
 			var domNode = args['node'];
 			//*/
@@ -3964,12 +3964,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.bl,
+		impl.bo,
+		impl.bD,
 		impl.bB,
-		impl.bz,
 		function(sendToApp, initialModel) {
-			var divertHrefToApp = impl.ah && impl.ah(sendToApp)
-			var view = impl.bD;
+			var divertHrefToApp = impl.aj && impl.aj(sendToApp)
+			var view = impl.bF;
 			var title = _VirtualDom_doc.title;
 			var bodyNode = _VirtualDom_doc.body;
 			var currNode = _VirtualDom_virtualize(bodyNode);
@@ -3977,12 +3977,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 			{
 				_VirtualDom_divertHrefToApp = divertHrefToApp;
 				var doc = view(model);
-				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.bb);
+				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.bd);
 				var patches = _VirtualDom_diff(currNode, nextNode);
 				bodyNode = _VirtualDom_applyPatches(bodyNode, currNode, patches, sendToApp);
 				currNode = nextNode;
 				_VirtualDom_divertHrefToApp = 0;
-				(title !== doc.x) && (_VirtualDom_doc.title = title = doc.x);
+				(title !== doc.u) && (_VirtualDom_doc.title = title = doc.u);
 			});
 		}
 	);
@@ -4038,12 +4038,12 @@ function _Browser_makeAnimator(model, draw)
 
 function _Browser_application(impl)
 {
-	var onUrlChange = impl.bq;
-	var onUrlRequest = impl.br;
+	var onUrlChange = impl.bs;
+	var onUrlRequest = impl.bt;
 	var key = function() { key.a(onUrlChange(_Browser_getUrl())); };
 
 	return _Browser_document({
-		ah: function(sendToApp)
+		aj: function(sendToApp)
 		{
 			key.a = sendToApp;
 			_Browser_window.addEventListener('popstate', key);
@@ -4059,9 +4059,9 @@ function _Browser_application(impl)
 					var next = $elm$url$Url$fromString(href).a;
 					sendToApp(onUrlRequest(
 						(next
-							&& curr.aP === next.aP
-							&& curr.ay === next.ay
-							&& curr.aI.a === next.aI.a
+							&& curr.aR === next.aR
+							&& curr.aA === next.aA
+							&& curr.aK.a === next.aK.a
 						)
 							? $elm$browser$Browser$Internal(next)
 							: $elm$browser$Browser$External(href)
@@ -4069,13 +4069,13 @@ function _Browser_application(impl)
 				}
 			});
 		},
-		bl: function(flags)
+		bo: function(flags)
 		{
-			return A3(impl.bl, flags, _Browser_getUrl(), key);
+			return A3(impl.bo, flags, _Browser_getUrl(), key);
 		},
+		bF: impl.bF,
 		bD: impl.bD,
-		bB: impl.bB,
-		bz: impl.bz
+		bB: impl.bB
 	});
 }
 
@@ -4141,17 +4141,17 @@ var _Browser_decodeEvent = F2(function(decoder, event)
 function _Browser_visibilityInfo()
 {
 	return (typeof _VirtualDom_doc.hidden !== 'undefined')
-		? { bj: 'hidden', bc: 'visibilitychange' }
+		? { bm: 'hidden', be: 'visibilitychange' }
 		:
 	(typeof _VirtualDom_doc.mozHidden !== 'undefined')
-		? { bj: 'mozHidden', bc: 'mozvisibilitychange' }
+		? { bm: 'mozHidden', be: 'mozvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.msHidden !== 'undefined')
-		? { bj: 'msHidden', bc: 'msvisibilitychange' }
+		? { bm: 'msHidden', be: 'msvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.webkitHidden !== 'undefined')
-		? { bj: 'webkitHidden', bc: 'webkitvisibilitychange' }
-		: { bj: 'hidden', bc: 'visibilitychange' };
+		? { bm: 'webkitHidden', be: 'webkitvisibilitychange' }
+		: { bm: 'hidden', be: 'visibilitychange' };
 }
 
 
@@ -4232,12 +4232,12 @@ var _Browser_call = F2(function(functionName, id)
 function _Browser_getViewport()
 {
 	return {
-		aX: _Browser_getScene(),
-		a4: {
-			a6: _Browser_window.pageXOffset,
-			a7: _Browser_window.pageYOffset,
-			a5: _Browser_doc.documentElement.clientWidth,
-			aw: _Browser_doc.documentElement.clientHeight
+		aZ: _Browser_getScene(),
+		a6: {
+			a8: _Browser_window.pageXOffset,
+			a9: _Browser_window.pageYOffset,
+			a7: _Browser_doc.documentElement.clientWidth,
+			ay: _Browser_doc.documentElement.clientHeight
 		}
 	};
 }
@@ -4247,8 +4247,8 @@ function _Browser_getScene()
 	var body = _Browser_doc.body;
 	var elem = _Browser_doc.documentElement;
 	return {
-		a5: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
-		aw: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
+		a7: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
+		ay: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
 	};
 }
 
@@ -4271,15 +4271,15 @@ function _Browser_getViewportOf(id)
 	return _Browser_withNode(id, function(node)
 	{
 		return {
-			aX: {
-				a5: node.scrollWidth,
-				aw: node.scrollHeight
+			aZ: {
+				a7: node.scrollWidth,
+				ay: node.scrollHeight
 			},
-			a4: {
-				a6: node.scrollLeft,
-				a7: node.scrollTop,
-				a5: node.clientWidth,
-				aw: node.clientHeight
+			a6: {
+				a8: node.scrollLeft,
+				a9: node.scrollTop,
+				a7: node.clientWidth,
+				ay: node.clientHeight
 			}
 		};
 	});
@@ -4309,18 +4309,18 @@ function _Browser_getElement(id)
 		var x = _Browser_window.pageXOffset;
 		var y = _Browser_window.pageYOffset;
 		return {
-			aX: _Browser_getScene(),
-			a4: {
-				a6: x,
-				a7: y,
-				a5: _Browser_doc.documentElement.clientWidth,
-				aw: _Browser_doc.documentElement.clientHeight
+			aZ: _Browser_getScene(),
+			a6: {
+				a8: x,
+				a9: y,
+				a7: _Browser_doc.documentElement.clientWidth,
+				ay: _Browser_doc.documentElement.clientHeight
 			},
-			bg: {
-				a6: x + rect.left,
-				a7: y + rect.top,
-				a5: rect.width,
-				aw: rect.height
+			bj: {
+				a8: x + rect.left,
+				a9: y + rect.top,
+				a7: rect.width,
+				ay: rect.height
 			}
 		};
 	});
@@ -4578,25 +4578,25 @@ var _Http_toTask = F3(function(router, toTask, request)
 	return _Scheduler_binding(function(callback)
 	{
 		function done(response) {
-			callback(toTask(request.bh.a(response)));
+			callback(toTask(request.bk.a(response)));
 		}
 
 		var xhr = new XMLHttpRequest();
 		xhr.addEventListener('error', function() { done($elm$http$Http$NetworkError_); });
 		xhr.addEventListener('timeout', function() { done($elm$http$Http$Timeout_); });
-		xhr.addEventListener('load', function() { done(_Http_toResponse(request.bh.b, xhr)); });
-		$elm$core$Maybe$isJust(request.a2) && _Http_track(router, xhr, request.a2.a);
+		xhr.addEventListener('load', function() { done(_Http_toResponse(request.bk.b, xhr)); });
+		$elm$core$Maybe$isJust(request.a4) && _Http_track(router, xhr, request.a4.a);
 
 		try {
-			xhr.open(request.bo, request.bC, true);
+			xhr.open(request.bq, request.bE, true);
 		} catch (e) {
-			return done($elm$http$Http$BadUrl_(request.bC));
+			return done($elm$http$Http$BadUrl_(request.bE));
 		}
 
 		_Http_configureRequest(xhr, request);
 
-		request.bb.a && xhr.setRequestHeader('Content-Type', request.bb.a);
-		xhr.send(request.bb.b);
+		request.bd.a && xhr.setRequestHeader('Content-Type', request.bd.a);
+		xhr.send(request.bd.b);
 
 		return function() { xhr.c = true; xhr.abort(); };
 	});
@@ -4607,13 +4607,13 @@ var _Http_toTask = F3(function(router, toTask, request)
 
 function _Http_configureRequest(xhr, request)
 {
-	for (var headers = request.av; headers.b; headers = headers.b) // WHILE_CONS
+	for (var headers = request.ax; headers.b; headers = headers.b) // WHILE_CONS
 	{
 		xhr.setRequestHeader(headers.a.a, headers.a.b);
 	}
-	xhr.timeout = request.bA.a || 0;
-	xhr.responseType = request.bh.d;
-	xhr.withCredentials = request.a9;
+	xhr.timeout = request.bC.a || 0;
+	xhr.responseType = request.bk.d;
+	xhr.withCredentials = request.bb;
 }
 
 
@@ -4634,10 +4634,10 @@ function _Http_toResponse(toBody, xhr)
 function _Http_toMetadata(xhr)
 {
 	return {
-		bC: xhr.responseURL,
-		bx: xhr.status,
-		by: xhr.statusText,
-		av: _Http_parseHeaders(xhr.getAllResponseHeaders())
+		bE: xhr.responseURL,
+		bz: xhr.status,
+		bA: xhr.statusText,
+		ax: _Http_parseHeaders(xhr.getAllResponseHeaders())
 	};
 }
 
@@ -4732,15 +4732,15 @@ function _Http_track(router, xhr, tracker)
 	xhr.upload.addEventListener('progress', function(event) {
 		if (xhr.c) { return; }
 		_Scheduler_rawSpawn(A2($elm$core$Platform$sendToSelf, router, _Utils_Tuple2(tracker, $elm$http$Http$Sending({
-			bv: event.loaded,
-			a_: event.total
+			bx: event.loaded,
+			a0: event.total
 		}))));
 	});
 	xhr.addEventListener('progress', function(event) {
 		if (xhr.c) { return; }
 		_Scheduler_rawSpawn(A2($elm$core$Platform$sendToSelf, router, _Utils_Tuple2(tracker, $elm$http$Http$Receiving({
-			bt: event.loaded,
-			a_: event.lengthComputable ? $elm$core$Maybe$Just(event.total) : $elm$core$Maybe$Nothing
+			bv: event.loaded,
+			a0: event.lengthComputable ? $elm$core$Maybe$Just(event.total) : $elm$core$Maybe$Nothing
 		}))));
 	});
 }var $elm$core$List$cons = _List_cons;
@@ -4824,7 +4824,7 @@ var $elm$core$Basics$EQ = 1;
 var $elm$core$Basics$GT = 2;
 var $elm$core$Basics$LT = 0;
 var $author$project$Model$GotUUID = function (a) {
-	return {$: 11, a: a};
+	return {$: 12, a: a};
 };
 var $elm$core$Basics$apL = F2(
 	function (f, x) {
@@ -5152,25 +5152,25 @@ var $elm$core$Array$treeFromBuilder = F2(
 	});
 var $elm$core$Array$builderToArray = F2(
 	function (reverseNodeList, builder) {
-		if (!builder.g) {
+		if (!builder.j) {
 			return A4(
 				$elm$core$Array$Array_elm_builtin,
-				$elm$core$Elm$JsArray$length(builder.j),
+				$elm$core$Elm$JsArray$length(builder.m),
 				$elm$core$Array$shiftStep,
 				$elm$core$Elm$JsArray$empty,
-				builder.j);
+				builder.m);
 		} else {
-			var treeLen = builder.g * $elm$core$Array$branchFactor;
+			var treeLen = builder.j * $elm$core$Array$branchFactor;
 			var depth = $elm$core$Basics$floor(
 				A2($elm$core$Basics$logBase, $elm$core$Array$branchFactor, treeLen - 1));
-			var correctNodeList = reverseNodeList ? $elm$core$List$reverse(builder.m) : builder.m;
-			var tree = A2($elm$core$Array$treeFromBuilder, correctNodeList, builder.g);
+			var correctNodeList = reverseNodeList ? $elm$core$List$reverse(builder.n) : builder.n;
+			var tree = A2($elm$core$Array$treeFromBuilder, correctNodeList, builder.j);
 			return A4(
 				$elm$core$Array$Array_elm_builtin,
-				$elm$core$Elm$JsArray$length(builder.j) + treeLen,
+				$elm$core$Elm$JsArray$length(builder.m) + treeLen,
 				A2($elm$core$Basics$max, 5, depth * $elm$core$Array$shiftStep),
 				tree,
-				builder.j);
+				builder.m);
 		}
 	});
 var $elm$core$Basics$idiv = _Basics_idiv;
@@ -5183,7 +5183,7 @@ var $elm$core$Array$initializeHelp = F5(
 				return A2(
 					$elm$core$Array$builderToArray,
 					false,
-					{m: nodeList, g: (len / $elm$core$Array$branchFactor) | 0, j: tail});
+					{n: nodeList, j: (len / $elm$core$Array$branchFactor) | 0, m: tail});
 			} else {
 				var leaf = $elm$core$Array$Leaf(
 					A3($elm$core$Elm$JsArray$initialize, $elm$core$Array$branchFactor, fromIndex, fn));
@@ -5251,7 +5251,7 @@ var $elm$url$Url$Http = 0;
 var $elm$url$Url$Https = 1;
 var $elm$url$Url$Url = F6(
 	function (protocol, host, port_, path, query, fragment) {
-		return {au: fragment, ay: host, w: path, aI: port_, aP: protocol, aQ: query};
+		return {aw: fragment, aA: host, t: path, aK: port_, aR: protocol, aS: query};
 	});
 var $elm$core$String$contains = _String_contains;
 var $elm$core$String$length = _String_length;
@@ -5632,9 +5632,9 @@ var $author$project$Model$PreGame = {$: 2};
 var $elm$core$Dict$RBEmpty_elm_builtin = {$: -2};
 var $elm$core$Dict$empty = $elm$core$Dict$RBEmpty_elm_builtin;
 var $author$project$Main$initialModel = function () {
-	var options = {f: false, X: '', D: 6, aG: '', z: '', o: '', k: 0};
-	var gameState = {I: _List_Nil, w: _List_Nil, M: _List_Nil, O: 0};
-	return {R: _List_Nil, ac: false, s: gameState, Y: _List_Nil, b: options, i: $elm$core$Dict$empty, Z: '', l: $author$project$Model$PreGame};
+	var options = {f: false, ab: '', F: 6, aI: '', A: '', l: '', g: 0};
+	var gameState = {z: _List_Nil, t: _List_Nil, N: _List_Nil, H: 0};
+	return {D: _List_Nil, R: false, o: gameState, S: _List_Nil, a: options, i: $elm$core$Dict$empty, X: '', h: $author$project$Model$PreGame};
 }();
 var $elm$core$Bitwise$and = _Bitwise_and;
 var $elm$core$Basics$negate = function (n) {
@@ -5681,10 +5681,10 @@ var $elm$json$Json$Encode$string = _Json_wrap;
 var $author$project$PeerPort$makePeer = _Platform_outgoingPort('makePeer', $elm$json$Json$Encode$string);
 var $elm$random$Random$maxInt = 2147483647;
 var $author$project$Model$PeerMsg = function (a) {
-	return {$: 10, a: a};
+	return {$: 11, a: a};
 };
 var $author$project$Model$Tick = function (a) {
-	return {$: 9, a: a};
+	return {$: 10, a: a};
 };
 var $elm$core$Platform$Sub$batch = _Platform_batch;
 var $elm$time$Time$Every = F2(
@@ -5693,7 +5693,7 @@ var $elm$time$Time$Every = F2(
 	});
 var $elm$time$Time$State = F2(
 	function (taggers, processes) {
-		return {aO: processes, a1: taggers};
+		return {aQ: processes, a3: taggers};
 	});
 var $elm$time$Time$init = $elm$core$Task$succeed(
 	A2($elm$time$Time$State, $elm$core$Dict$empty, $elm$core$Dict$empty));
@@ -5972,7 +5972,7 @@ var $elm$time$Time$spawnHelp = F3(
 	});
 var $elm$time$Time$onEffects = F3(
 	function (router, subs, _v0) {
-		var processes = _v0.aO;
+		var processes = _v0.aQ;
 		var rightStep = F3(
 			function (_v6, id, _v7) {
 				var spawns = _v7.a;
@@ -6038,7 +6038,7 @@ var $elm$time$Time$onEffects = F3(
 	});
 var $elm$time$Time$onSelfMsg = F3(
 	function (router, interval, state) {
-		var _v0 = A2($elm$core$Dict$get, interval, state.a1);
+		var _v0 = A2($elm$core$Dict$get, interval, state.a3);
 		if (_v0.$ === 1) {
 			return $elm$core$Task$succeed(state);
 		} else {
@@ -6087,7 +6087,7 @@ var $elm$time$Time$every = F2(
 var $elm$core$Platform$Sub$map = _Platform_map;
 var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
 var $author$project$PeerPort$Malformed = function (a) {
-	return {$: 10, a: a};
+	return {$: 11, a: a};
 };
 var $elm$core$Basics$composeR = F3(
 	function (f, g, x) {
@@ -6095,7 +6095,7 @@ var $elm$core$Basics$composeR = F3(
 			f(x));
 	});
 var $author$project$PeerPort$Error = function (a) {
-	return {$: 8, a: a};
+	return {$: 9, a: a};
 };
 var $elm$json$Json$Decode$field = _Json_decodeField;
 var $elm$json$Json$Decode$string = _Json_decodeString;
@@ -6125,25 +6125,28 @@ var $author$project$PeerPort$gameFinishDecoder = A2(
 		A2($elm$json$Json$Decode$field, 'time', $elm$json$Json$Decode$int)));
 var $author$project$PeerPort$GameInfo = F2(
 	function (a, b) {
-		return {$: 9, a: a, b: b};
+		return {$: 10, a: a, b: b};
 	});
 var $author$project$PeerPort$Info = F4(
 	function (seed, numDestinations, peers, started) {
-		return {D: numDestinations, i: peers, aY: seed, bw: started};
+		return {F: numDestinations, i: peers, a_: seed, by: started};
 	});
 var $elm$json$Json$Decode$bool = _Json_decodeBool;
 var $elm$json$Json$Decode$map4 = _Json_map4;
-var $author$project$PeerPort$Peer = F3(
-	function (uuid, username, isHost) {
-		return {f: isHost, o: username, k: uuid};
+var $author$project$PeerPort$Peer = F5(
+	function (uuid, username, isHost, lastDest, finished) {
+		return {Q: finished, f: isHost, K: lastDest, l: username, g: uuid};
 	});
+var $elm$json$Json$Decode$map5 = _Json_map5;
 var $author$project$PeerPort$usernameDecoder = A2($elm$json$Json$Decode$field, 'username', $elm$json$Json$Decode$string);
-var $author$project$PeerPort$peerDecoder = A4(
-	$elm$json$Json$Decode$map3,
+var $author$project$PeerPort$peerDecoder = A6(
+	$elm$json$Json$Decode$map5,
 	$author$project$PeerPort$Peer,
 	$author$project$PeerPort$uuidDecoder,
 	$author$project$PeerPort$usernameDecoder,
-	A2($elm$json$Json$Decode$field, 'isHost', $elm$json$Json$Decode$bool));
+	A2($elm$json$Json$Decode$field, 'isHost', $elm$json$Json$Decode$bool),
+	A2($elm$json$Json$Decode$field, 'lastDest', $elm$json$Json$Decode$string),
+	A2($elm$json$Json$Decode$field, 'finished', $elm$json$Json$Decode$bool));
 var $author$project$PeerPort$gameInfoDecoder = A2(
 	$elm$json$Json$Decode$field,
 	'gameInfo',
@@ -6181,6 +6184,13 @@ var $author$project$PeerPort$hostLostDecoder = A2(
 	$elm$json$Json$Decode$map,
 	$author$project$PeerPort$HostLost,
 	A2($elm$json$Json$Decode$field, 'hostLost', $elm$json$Json$Decode$string));
+var $author$project$PeerPort$HostWantsNewGame = function (a) {
+	return {$: 7, a: a};
+};
+var $author$project$PeerPort$hostWantsNewGame = A2(
+	$elm$json$Json$Decode$map,
+	$author$project$PeerPort$HostWantsNewGame,
+	A2($elm$json$Json$Decode$field, 'newGame', $elm$json$Json$Decode$string));
 var $author$project$PeerPort$PeerConnect = F2(
 	function (a, b) {
 		return {$: 4, a: a, b: b};
@@ -6197,7 +6207,7 @@ var $author$project$PeerPort$peerDisconnectDecoder = A2(
 	'peerDisconnect',
 	A2($elm$json$Json$Decode$map, $author$project$PeerPort$PeerDisconnect, $author$project$PeerPort$uuidDecoder));
 var $author$project$PeerPort$IdGenerated = function (a) {
-	return {$: 7, a: a};
+	return {$: 8, a: a};
 };
 var $author$project$PeerPort$peerIdGenDecoder = A2(
 	$elm$json$Json$Decode$map,
@@ -6228,7 +6238,7 @@ var $author$project$PeerPort$titleReachDecoder = A2(
 		$author$project$PeerPort$uuidDecoder,
 		A2($elm$json$Json$Decode$field, 'title', $elm$json$Json$Decode$string)));
 var $author$project$PeerPort$decoders = _List_fromArray(
-	[$author$project$PeerPort$seedInfoDecoder, $author$project$PeerPort$gameStartDecoder, $author$project$PeerPort$titleReachDecoder, $author$project$PeerPort$gameFinishDecoder, $author$project$PeerPort$peerConnectDecoder, $author$project$PeerPort$peerDisconnectDecoder, $author$project$PeerPort$peerIdGenDecoder, $author$project$PeerPort$gameInfoDecoder, $author$project$PeerPort$errorDecoder, $author$project$PeerPort$hostLostDecoder]);
+	[$author$project$PeerPort$seedInfoDecoder, $author$project$PeerPort$gameStartDecoder, $author$project$PeerPort$titleReachDecoder, $author$project$PeerPort$gameFinishDecoder, $author$project$PeerPort$peerConnectDecoder, $author$project$PeerPort$peerDisconnectDecoder, $author$project$PeerPort$peerIdGenDecoder, $author$project$PeerPort$gameInfoDecoder, $author$project$PeerPort$errorDecoder, $author$project$PeerPort$hostLostDecoder, $author$project$PeerPort$hostWantsNewGame]);
 var $elm$json$Json$Decode$oneOf = _Json_oneOf;
 var $author$project$PeerPort$dataDecoder = $elm$json$Json$Decode$oneOf($author$project$PeerPort$decoders);
 var $elm$json$Json$Decode$decodeValue = _Json_run;
@@ -6253,7 +6263,7 @@ var $author$project$PeerPort$receiveDataFromJS = function () {
 }();
 var $author$project$Main$subscriptions = function (model) {
 	var tickSub = function () {
-		var _v0 = model.l;
+		var _v0 = model.h;
 		if (!_v0.$) {
 			return A2($elm$time$Time$every, 10, $author$project$Model$Tick);
 		} else {
@@ -6279,35 +6289,6 @@ var $author$project$Model$InPage = function (a) {
 var $author$project$Model$Review = function (a) {
 	return {$: 4, a: a};
 };
-var $elm$core$List$any = F2(
-	function (isOkay, list) {
-		any:
-		while (true) {
-			if (!list.b) {
-				return false;
-			} else {
-				var x = list.a;
-				var xs = list.b;
-				if (isOkay(x)) {
-					return true;
-				} else {
-					var $temp$isOkay = isOkay,
-						$temp$list = xs;
-					isOkay = $temp$isOkay;
-					list = $temp$list;
-					continue any;
-				}
-			}
-		}
-	});
-var $elm$core$Basics$not = _Basics_not;
-var $elm$core$List$all = F2(
-	function (isOkay, list) {
-		return !A2(
-			$elm$core$List$any,
-			A2($elm$core$Basics$composeL, $elm$core$Basics$not, isOkay),
-			list);
-	});
 var $author$project$Model$Loading = function (a) {
 	return {$: 0, a: a};
 };
@@ -6526,7 +6507,7 @@ var $elm$parser$Parser$Advanced$AddRight = F2(
 	});
 var $elm$parser$Parser$Advanced$DeadEnd = F4(
 	function (row, col, problem, contextStack) {
-		return {an: col, be: contextStack, aM: problem, aW: row};
+		return {ap: col, bg: contextStack, aO: problem, aY: row};
 	});
 var $elm$parser$Parser$Advanced$Empty = {$: 0};
 var $elm$parser$Parser$Advanced$fromState = F2(
@@ -6534,13 +6515,13 @@ var $elm$parser$Parser$Advanced$fromState = F2(
 		return A2(
 			$elm$parser$Parser$Advanced$AddRight,
 			$elm$parser$Parser$Advanced$Empty,
-			A4($elm$parser$Parser$Advanced$DeadEnd, s.aW, s.an, x, s.d));
+			A4($elm$parser$Parser$Advanced$DeadEnd, s.aY, s.ap, x, s.d));
 	});
 var $elm$parser$Parser$Advanced$isSubChar = _Parser_isSubChar;
 var $elm$parser$Parser$Advanced$chompIf = F2(
 	function (isGood, expecting) {
 		return function (s) {
-			var newOffset = A3($elm$parser$Parser$Advanced$isSubChar, isGood, s.c, s.a);
+			var newOffset = A3($elm$parser$Parser$Advanced$isSubChar, isGood, s.c, s.b);
 			return _Utils_eq(newOffset, -1) ? A2(
 				$elm$parser$Parser$Advanced$Bad,
 				false,
@@ -6548,11 +6529,11 @@ var $elm$parser$Parser$Advanced$chompIf = F2(
 				$elm$parser$Parser$Advanced$Good,
 				true,
 				0,
-				{an: 1, d: s.d, e: s.e, c: s.c + 1, aW: s.aW + 1, a: s.a}) : A3(
+				{ap: 1, d: s.d, e: s.e, c: s.c + 1, aY: s.aY + 1, b: s.b}) : A3(
 				$elm$parser$Parser$Advanced$Good,
 				true,
 				0,
-				{an: s.an + 1, d: s.d, e: s.e, c: newOffset, aW: s.aW, a: s.a}));
+				{ap: s.ap + 1, d: s.d, e: s.e, c: newOffset, aY: s.aY, b: s.b}));
 		};
 	});
 var $elm$parser$Parser$chompIf = function (isGood) {
@@ -6562,13 +6543,13 @@ var $elm$parser$Parser$Advanced$chompWhileHelp = F5(
 	function (isGood, offset, row, col, s0) {
 		chompWhileHelp:
 		while (true) {
-			var newOffset = A3($elm$parser$Parser$Advanced$isSubChar, isGood, offset, s0.a);
+			var newOffset = A3($elm$parser$Parser$Advanced$isSubChar, isGood, offset, s0.b);
 			if (_Utils_eq(newOffset, -1)) {
 				return A3(
 					$elm$parser$Parser$Advanced$Good,
 					_Utils_cmp(s0.c, offset) < 0,
 					0,
-					{an: col, d: s0.d, e: s0.e, c: offset, aW: row, a: s0.a});
+					{ap: col, d: s0.d, e: s0.e, c: offset, aY: row, b: s0.b});
 			} else {
 				if (_Utils_eq(newOffset, -2)) {
 					var $temp$isGood = isGood,
@@ -6600,7 +6581,7 @@ var $elm$parser$Parser$Advanced$chompWhileHelp = F5(
 	});
 var $elm$parser$Parser$Advanced$chompWhile = function (isGood) {
 	return function (s) {
-		return A5($elm$parser$Parser$Advanced$chompWhileHelp, isGood, s.c, s.aW, s.an, s);
+		return A5($elm$parser$Parser$Advanced$chompWhileHelp, isGood, s.c, s.aY, s.ap, s);
 	};
 };
 var $elm$parser$Parser$chompWhile = $elm$parser$Parser$Advanced$chompWhile;
@@ -6669,7 +6650,7 @@ var $elm$parser$Parser$Advanced$mapChompedString = F2(
 					p,
 					A2(
 						func,
-						A3($elm$core$String$slice, s0.c, s1.c, s0.a),
+						A3($elm$core$String$slice, s0.c, s1.c, s0.b),
 						a),
 					s1);
 			}
@@ -6683,6 +6664,7 @@ var $hecrj$html_parser$Html$Parser$isSpaceCharacter = function (c) {
 	return (c === ' ') || ((c === '\t') || ((c === '\n') || ((c === '\u000D') || ((c === '\u000C') || (c === '\u00A0')))));
 };
 var $elm$core$Basics$neq = _Utils_notEqual;
+var $elm$core$Basics$not = _Basics_not;
 var $elm$parser$Parser$Problem = function (a) {
 	return {$: 12, a: a};
 };
@@ -6750,7 +6732,7 @@ var $elm$parser$Parser$Advanced$chompUntil = function (_v0) {
 	var str = _v0.a;
 	var expecting = _v0.b;
 	return function (s) {
-		var _v1 = A5($elm$parser$Parser$Advanced$findSubString, str, s.c, s.aW, s.an, s.a);
+		var _v1 = A5($elm$parser$Parser$Advanced$findSubString, str, s.c, s.aY, s.ap, s.b);
 		var newOffset = _v1.a;
 		var newRow = _v1.b;
 		var newCol = _v1.c;
@@ -6761,7 +6743,7 @@ var $elm$parser$Parser$Advanced$chompUntil = function (_v0) {
 			$elm$parser$Parser$Advanced$Good,
 			_Utils_cmp(s.c, newOffset) < 0,
 			0,
-			{an: newCol, d: s.d, e: s.e, c: newOffset, aW: newRow, a: s.a});
+			{ap: newCol, d: s.d, e: s.e, c: newOffset, aY: newRow, b: s.b});
 	};
 };
 var $elm$parser$Parser$Expecting = function (a) {
@@ -6792,7 +6774,7 @@ var $elm$parser$Parser$Advanced$token = function (_v0) {
 	var expecting = _v0.b;
 	var progress = !$elm$core$String$isEmpty(str);
 	return function (s) {
-		var _v1 = A5($elm$parser$Parser$Advanced$isSubString, str, s.c, s.aW, s.an, s.a);
+		var _v1 = A5($elm$parser$Parser$Advanced$isSubString, str, s.c, s.aY, s.ap, s.b);
 		var newOffset = _v1.a;
 		var newRow = _v1.b;
 		var newCol = _v1.c;
@@ -6803,7 +6785,7 @@ var $elm$parser$Parser$Advanced$token = function (_v0) {
 			$elm$parser$Parser$Advanced$Good,
 			progress,
 			0,
-			{an: newCol, d: s.d, e: s.e, c: newOffset, aW: newRow, a: s.a});
+			{ap: newCol, d: s.d, e: s.e, c: newOffset, aY: newRow, b: s.b});
 	};
 };
 var $elm$parser$Parser$token = function (str) {
@@ -6847,6 +6829,27 @@ var $elm$parser$Parser$Advanced$map = F2(
 	});
 var $elm$parser$Parser$map = $elm$parser$Parser$Advanced$map;
 var $hecrj$html_parser$Html$Parser$comment = A2($elm$parser$Parser$map, $hecrj$html_parser$Html$Parser$Comment, $hecrj$html_parser$Html$Parser$commentString);
+var $elm$core$List$any = F2(
+	function (isOkay, list) {
+		any:
+		while (true) {
+			if (!list.b) {
+				return false;
+			} else {
+				var x = list.a;
+				var xs = list.b;
+				if (isOkay(x)) {
+					return true;
+				} else {
+					var $temp$isOkay = isOkay,
+						$temp$list = xs;
+					isOkay = $temp$isOkay;
+					list = $temp$list;
+					continue any;
+				}
+			}
+		}
+	});
 var $elm$core$List$member = F2(
 	function (x, xs) {
 		return A2(
@@ -9418,7 +9421,7 @@ var $elm$parser$Parser$Advanced$consumeBase = _Parser_consumeBase;
 var $elm$parser$Parser$Advanced$consumeBase16 = _Parser_consumeBase16;
 var $elm$parser$Parser$Advanced$bumpOffset = F2(
 	function (newOffset, s) {
-		return {an: s.an + (newOffset - s.c), d: s.d, e: s.e, c: newOffset, aW: s.aW, a: s.a};
+		return {ap: s.ap + (newOffset - s.c), d: s.d, e: s.e, c: newOffset, aY: s.aY, b: s.b};
 	});
 var $elm$parser$Parser$Advanced$chompBase10 = _Parser_chompBase10;
 var $elm$parser$Parser$Advanced$isAsciiCode = _Parser_isAsciiCode;
@@ -9466,12 +9469,12 @@ var $elm$core$String$toFloat = _String_toFloat;
 var $elm$parser$Parser$Advanced$finalizeFloat = F6(
 	function (invalid, expecting, intSettings, floatSettings, intPair, s) {
 		var intOffset = intPair.a;
-		var floatOffset = A2($elm$parser$Parser$Advanced$consumeDotAndExp, intOffset, s.a);
+		var floatOffset = A2($elm$parser$Parser$Advanced$consumeDotAndExp, intOffset, s.b);
 		if (floatOffset < 0) {
 			return A2(
 				$elm$parser$Parser$Advanced$Bad,
 				true,
-				A4($elm$parser$Parser$Advanced$fromInfo, s.aW, s.an - (floatOffset + s.c), invalid, s.d));
+				A4($elm$parser$Parser$Advanced$fromInfo, s.aY, s.ap - (floatOffset + s.c), invalid, s.d));
 		} else {
 			if (_Utils_eq(s.c, floatOffset)) {
 				return A2(
@@ -9491,7 +9494,7 @@ var $elm$parser$Parser$Advanced$finalizeFloat = F6(
 					} else {
 						var toValue = floatSettings.a;
 						var _v1 = $elm$core$String$toFloat(
-							A3($elm$core$String$slice, s.c, floatOffset, s.a));
+							A3($elm$core$String$slice, s.c, floatOffset, s.b));
 						if (_v1.$ === 1) {
 							return A2(
 								$elm$parser$Parser$Advanced$Bad,
@@ -9512,43 +9515,43 @@ var $elm$parser$Parser$Advanced$finalizeFloat = F6(
 	});
 var $elm$parser$Parser$Advanced$number = function (c) {
 	return function (s) {
-		if (A3($elm$parser$Parser$Advanced$isAsciiCode, 48, s.c, s.a)) {
+		if (A3($elm$parser$Parser$Advanced$isAsciiCode, 48, s.c, s.b)) {
 			var zeroOffset = s.c + 1;
 			var baseOffset = zeroOffset + 1;
-			return A3($elm$parser$Parser$Advanced$isAsciiCode, 120, zeroOffset, s.a) ? A5(
+			return A3($elm$parser$Parser$Advanced$isAsciiCode, 120, zeroOffset, s.b) ? A5(
 				$elm$parser$Parser$Advanced$finalizeInt,
-				c.bm,
-				c.ax,
+				c.bp,
+				c.az,
 				baseOffset,
-				A2($elm$parser$Parser$Advanced$consumeBase16, baseOffset, s.a),
-				s) : (A3($elm$parser$Parser$Advanced$isAsciiCode, 111, zeroOffset, s.a) ? A5(
+				A2($elm$parser$Parser$Advanced$consumeBase16, baseOffset, s.b),
+				s) : (A3($elm$parser$Parser$Advanced$isAsciiCode, 111, zeroOffset, s.b) ? A5(
 				$elm$parser$Parser$Advanced$finalizeInt,
-				c.bm,
-				c.aF,
+				c.bp,
+				c.aH,
 				baseOffset,
-				A3($elm$parser$Parser$Advanced$consumeBase, 8, baseOffset, s.a),
-				s) : (A3($elm$parser$Parser$Advanced$isAsciiCode, 98, zeroOffset, s.a) ? A5(
+				A3($elm$parser$Parser$Advanced$consumeBase, 8, baseOffset, s.b),
+				s) : (A3($elm$parser$Parser$Advanced$isAsciiCode, 98, zeroOffset, s.b) ? A5(
 				$elm$parser$Parser$Advanced$finalizeInt,
-				c.bm,
-				c.al,
+				c.bp,
+				c.an,
 				baseOffset,
-				A3($elm$parser$Parser$Advanced$consumeBase, 2, baseOffset, s.a),
+				A3($elm$parser$Parser$Advanced$consumeBase, 2, baseOffset, s.b),
 				s) : A6(
 				$elm$parser$Parser$Advanced$finalizeFloat,
-				c.bm,
-				c.as,
-				c.aB,
-				c.at,
+				c.bp,
+				c.au,
+				c.aD,
+				c.av,
 				_Utils_Tuple2(zeroOffset, 0),
 				s)));
 		} else {
 			return A6(
 				$elm$parser$Parser$Advanced$finalizeFloat,
-				c.bm,
-				c.as,
-				c.aB,
-				c.at,
-				A3($elm$parser$Parser$Advanced$consumeBase, 10, s.c, s.a),
+				c.bp,
+				c.au,
+				c.aD,
+				c.av,
+				A3($elm$parser$Parser$Advanced$consumeBase, 10, s.c, s.b),
 				s);
 		}
 	};
@@ -9557,13 +9560,13 @@ var $elm$parser$Parser$Advanced$int = F2(
 	function (expecting, invalid) {
 		return $elm$parser$Parser$Advanced$number(
 			{
-				al: $elm$core$Result$Err(invalid),
-				as: expecting,
-				at: $elm$core$Result$Err(invalid),
-				ax: $elm$core$Result$Err(invalid),
-				aB: $elm$core$Result$Ok($elm$core$Basics$identity),
-				bm: invalid,
-				aF: $elm$core$Result$Err(invalid)
+				an: $elm$core$Result$Err(invalid),
+				au: expecting,
+				av: $elm$core$Result$Err(invalid),
+				az: $elm$core$Result$Err(invalid),
+				aD: $elm$core$Result$Ok($elm$core$Basics$identity),
+				bp: invalid,
+				aH: $elm$core$Result$Err(invalid)
 			});
 	});
 var $elm$parser$Parser$int = A2($elm$parser$Parser$Advanced$int, $elm$parser$Parser$ExpectingInt, $elm$parser$Parser$ExpectingInt);
@@ -9831,10 +9834,10 @@ $hecrj$html_parser$Html$Parser$cyclic$element = function () {
 };
 var $elm$parser$Parser$DeadEnd = F3(
 	function (row, col, problem) {
-		return {an: col, aM: problem, aW: row};
+		return {ap: col, aO: problem, aY: row};
 	});
 var $elm$parser$Parser$problemToDeadEnd = function (p) {
-	return A3($elm$parser$Parser$DeadEnd, p.aW, p.an, p.aM);
+	return A3($elm$parser$Parser$DeadEnd, p.aY, p.ap, p.aO);
 };
 var $elm$parser$Parser$Advanced$bagToList = F2(
 	function (bag, list) {
@@ -9866,7 +9869,7 @@ var $elm$parser$Parser$Advanced$run = F2(
 	function (_v0, src) {
 		var parse = _v0;
 		var _v1 = parse(
-			{an: 1, d: _List_Nil, e: 1, c: 0, aW: 1, a: src});
+			{ap: 1, d: _List_Nil, e: 1, c: 0, aY: 1, b: src});
 		if (!_v1.$) {
 			var value = _v1.b;
 			return $elm$core$Result$Ok(value);
@@ -9900,31 +9903,31 @@ var $author$project$PageFetch$content = function (_v0) {
 		var page = res.a;
 		return $elm$core$Result$Ok(
 			function () {
-				var _v2 = $hecrj$html_parser$Html$Parser$run(page.az);
+				var _v2 = $hecrj$html_parser$Html$Parser$run(page.aB);
 				if (!_v2.$) {
 					var nodes = _v2.a;
 					return {
-						_: A2(
+						ac: A2(
 							$elm$core$Maybe$withDefault,
 							$hecrj$html_parser$Html$Parser$Text('Content couldn\'t be parsed. GO BACK'),
 							$elm$core$List$head(nodes)),
-						aa: A3(
+						ad: A3(
 							$elm$core$Basics$composeR,
 							$elm$core$Maybe$andThen($author$project$PageFetch$extractShortDesc),
 							$elm$core$Maybe$withDefault('No description found'),
 							$elm$core$List$head(nodes)),
-						ad: A2(
+						af: A2(
 							$elm$core$Maybe$andThen,
 							$author$project$PageFetch$grabImg,
 							$elm$core$List$head(nodes)),
-						x: page.x
+						u: page.u
 					};
 				} else {
 					return {
-						_: $hecrj$html_parser$Html$Parser$Text('This page isn\'t well formed. GO BACK'),
-						aa: 'No description found',
-						ad: $elm$core$Maybe$Nothing,
-						x: page.x
+						ac: $hecrj$html_parser$Html$Parser$Text('This page isn\'t well formed. GO BACK'),
+						ad: 'No description found',
+						af: $elm$core$Maybe$Nothing,
+						u: page.u
 					};
 				}
 			}());
@@ -10368,7 +10371,7 @@ var $elm$http$Http$resolve = F2(
 			case 3:
 				var metadata = response.a;
 				return $elm$core$Result$Err(
-					$elm$http$Http$BadStatus(metadata.bx));
+					$elm$http$Http$BadStatus(metadata.bz));
 			default:
 				var body = response.b;
 				return A2(
@@ -10396,7 +10399,7 @@ var $elm$http$Http$Request = function (a) {
 };
 var $elm$http$Http$State = F2(
 	function (reqs, subs) {
-		return {aS: reqs, a0: subs};
+		return {aU: reqs, a2: subs};
 	});
 var $elm$http$Http$init = $elm$core$Task$succeed(
 	A2($elm$http$Http$State, $elm$core$Dict$empty, _List_Nil));
@@ -10438,7 +10441,7 @@ var $elm$http$Http$updateReqs = F3(
 					return A2(
 						$elm$core$Task$andThen,
 						function (pid) {
-							var _v4 = req.a2;
+							var _v4 = req.a4;
 							if (_v4.$ === 1) {
 								return A3($elm$http$Http$updateReqs, router, otherCmds, reqs);
 							} else {
@@ -10468,7 +10471,7 @@ var $elm$http$Http$onEffects = F4(
 				return $elm$core$Task$succeed(
 					A2($elm$http$Http$State, reqs, subs));
 			},
-			A3($elm$http$Http$updateReqs, router, cmds, state.aS));
+			A3($elm$http$Http$updateReqs, router, cmds, state.aU));
 	});
 var $elm$core$List$maybeCons = F3(
 	function (f, mx, xs) {
@@ -10511,7 +10514,7 @@ var $elm$http$Http$onSelfMsg = F3(
 				A2(
 					$elm$core$List$filterMap,
 					A3($elm$http$Http$maybeSend, router, tracker, progress),
-					state.a0)));
+					state.a2)));
 	});
 var $elm$http$Http$Cancel = function (a) {
 	return {$: 0, a: a};
@@ -10525,14 +10528,14 @@ var $elm$http$Http$cmdMap = F2(
 			var r = cmd.a;
 			return $elm$http$Http$Request(
 				{
-					a9: r.a9,
 					bb: r.bb,
-					bh: A2(_Http_mapExpect, func, r.bh),
-					av: r.av,
-					bo: r.bo,
-					bA: r.bA,
-					a2: r.a2,
-					bC: r.bC
+					bd: r.bd,
+					bk: A2(_Http_mapExpect, func, r.bk),
+					ax: r.ax,
+					bq: r.bq,
+					bC: r.bC,
+					a4: r.a4,
+					bE: r.bE
 				});
 		}
 	});
@@ -10555,15 +10558,15 @@ var $elm$http$Http$subscription = _Platform_leaf('Http');
 var $elm$http$Http$request = function (r) {
 	return $elm$http$Http$command(
 		$elm$http$Http$Request(
-			{a9: false, bb: r.bb, bh: r.bh, av: r.av, bo: r.bo, bA: r.bA, a2: r.a2, bC: r.bC}));
+			{bb: false, bd: r.bd, bk: r.bk, ax: r.ax, bq: r.bq, bC: r.bC, a4: r.a4, bE: r.bE}));
 };
 var $elm$http$Http$get = function (r) {
 	return $elm$http$Http$request(
-		{bb: $elm$http$Http$emptyBody, bh: r.bh, av: _List_Nil, bo: 'GET', bA: $elm$core$Maybe$Nothing, a2: $elm$core$Maybe$Nothing, bC: r.bC});
+		{bd: $elm$http$Http$emptyBody, bk: r.bk, ax: _List_Nil, bq: 'GET', bC: $elm$core$Maybe$Nothing, a4: $elm$core$Maybe$Nothing, bE: r.bE});
 };
 var $author$project$PageFetch$PageHtml = F2(
 	function (title, html) {
-		return {az: html, x: title};
+		return {aB: html, u: title};
 	});
 var $author$project$PageFetch$pageDecoder = A2(
 	$elm$json$Json$Decode$field,
@@ -10587,8 +10590,8 @@ var $author$project$PageFetch$requestPage = function (title) {
 	var fixedTitle = A3($elm$core$String$replace, '&', '%26', title);
 	return $elm$http$Http$get(
 		{
-			bh: A2($elm$http$Http$expectJson, $elm$core$Basics$identity, $author$project$PageFetch$pageDecoder),
-			bC: 'https://still-woodland-82497.herokuapp.com/https://en.wikipedia.org/w/api.php?action=parse&prop=text&redirects=true&format=json&page=' + fixedTitle
+			bk: A2($elm$http$Http$expectJson, $elm$core$Basics$identity, $author$project$PageFetch$pageDecoder),
+			bE: 'https://still-woodland-82497.herokuapp.com/https://en.wikipedia.org/w/api.php?action=parse&prop=text&redirects=true&format=json&page=' + fixedTitle
 		});
 };
 var $author$project$PageFetch$getPage = function (title) {
@@ -10661,7 +10664,7 @@ var $elm$core$Array$fromListHelp = F3(
 				return A2(
 					$elm$core$Array$builderToArray,
 					true,
-					{m: nodeList, g: nodeListSize, j: jsArray});
+					{n: nodeList, j: nodeListSize, m: jsArray});
 			} else {
 				var $temp$list = remainingItems,
 					$temp$nodeList = A2(
@@ -10730,7 +10733,7 @@ var $author$project$Helpers$getDestinations = F2(
 				lastSeed);
 		}
 	});
-var $author$project$Model$NoOp = {$: 13};
+var $author$project$Model$NoOp = {$: 15};
 var $elm$browser$Browser$Dom$setViewport = _Browser_setViewport;
 var $author$project$Main$goBackToTop = A2(
 	$elm$core$Task$perform,
@@ -10793,19 +10796,19 @@ var $author$project$Helpers$strToSeed = function (s) {
 	return $elm$random$Random$initialSeed(hash);
 };
 var $author$project$Main$createGame = function (model) {
-	var toast = $author$project$Main$makeToast('game seed is: ' + model.b.z);
-	var signalPeers = model.b.f ? $author$project$PeerPort$sendData(
-		A2($author$project$PeerPort$seedInfo, model.b.D, model.b.z)) : $elm$core$Platform$Cmd$none;
+	var toast = $author$project$Main$makeToast('game seed is: ' + model.a.A);
+	var signalPeers = model.a.f ? $author$project$PeerPort$sendData(
+		A2($author$project$PeerPort$seedInfo, model.a.F, model.a.A)) : $elm$core$Platform$Cmd$none;
 	var _v0 = A2(
 		$author$project$Helpers$getDestinations,
-		model.b.D,
-		$author$project$Helpers$strToSeed(model.b.z));
+		model.a.F,
+		$author$project$Helpers$strToSeed(model.a.A));
 	var titles = _v0.a;
 	var loadingDests = A2($elm$core$List$map, $author$project$Model$Loading, titles);
 	return _Utils_Tuple2(
 		_Utils_update(
 			model,
-			{R: _List_Nil, Y: loadingDests, l: $author$project$Model$Preview}),
+			{D: _List_Nil, S: loadingDests, h: $author$project$Model$Preview}),
 		$elm$core$Platform$Cmd$batch(
 			A2(
 				$elm$core$List$cons,
@@ -10824,6 +10827,13 @@ var $author$project$Main$createGame = function (model) {
 								toast,
 								A2($elm$core$List$map, $author$project$Main$getDescription, titles))))))));
 };
+var $elm$core$List$all = F2(
+	function (isOkay, list) {
+		return !A2(
+			$elm$core$List$any,
+			A2($elm$core$Basics$composeL, $elm$core$Basics$not, isOkay),
+			list);
+	});
 var $author$project$Model$destIsLoaded = function (dest) {
 	if (dest.$ === 1) {
 		return true;
@@ -10831,7 +10841,8 @@ var $author$project$Model$destIsLoaded = function (dest) {
 		return false;
 	}
 };
-var $author$project$Model$emptyPeer = {f: false, bn: '', w: _List_Nil, O: 0, o: '', k: 0};
+var $author$project$Model$doneLoading = $elm$core$List$all($author$project$Model$destIsLoaded);
+var $author$project$Model$emptyPeer = {bh: '', Q: false, f: false, K: '', t: _List_Nil, H: 0, l: '', g: 0};
 var $author$project$Model$extractLoadedDestinations = function (loads) {
 	extractLoadedDestinations:
 	while (true) {
@@ -10854,6 +10865,17 @@ var $author$project$Model$extractLoadedDestinations = function (loads) {
 		}
 	}
 };
+var $elm$core$List$filter = F2(
+	function (isGood, list) {
+		return A3(
+			$elm$core$List$foldr,
+			F2(
+				function (x, xs) {
+					return isGood(x) ? A2($elm$core$List$cons, x, xs) : xs;
+				}),
+			_List_Nil,
+			list);
+	});
 var $elm$json$Json$Encode$list = F2(
 	function (func, entries) {
 		return _Json_wrap(
@@ -10891,13 +10913,19 @@ var $author$project$PeerPort$gameInfo = F2(
 					[
 						_Utils_Tuple2(
 						'uuid',
-						$elm$json$Json$Encode$int(peer.k)),
+						$elm$json$Json$Encode$int(peer.g)),
 						_Utils_Tuple2(
 						'username',
-						$elm$json$Json$Encode$string(peer.o)),
+						$elm$json$Json$Encode$string(peer.l)),
 						_Utils_Tuple2(
 						'isHost',
-						$elm$json$Json$Encode$bool(peer.f))
+						$elm$json$Json$Encode$bool(peer.f)),
+						_Utils_Tuple2(
+						'finished',
+						$elm$json$Json$Encode$bool(peer.Q)),
+						_Utils_Tuple2(
+						'lastDest',
+						$elm$json$Json$Encode$string(peer.K))
 					]));
 		};
 		var encodeInfo = $elm$json$Json$Encode$object(
@@ -10905,16 +10933,16 @@ var $author$project$PeerPort$gameInfo = F2(
 				[
 					_Utils_Tuple2(
 					'seed',
-					$elm$json$Json$Encode$string(info.aY)),
+					$elm$json$Json$Encode$string(info.a_)),
 					_Utils_Tuple2(
 					'numDestinations',
-					$elm$json$Json$Encode$int(info.D)),
+					$elm$json$Json$Encode$int(info.F)),
 					_Utils_Tuple2(
 					'peers',
 					A2($elm$json$Json$Encode$list, encodePeer, info.i)),
 					_Utils_Tuple2(
 					'started',
-					$elm$json$Json$Encode$bool(info.bw))
+					$elm$json$Json$Encode$bool(info.by))
 				]));
 		return A2(
 			$author$project$PeerPort$createMsg,
@@ -10946,16 +10974,16 @@ var $author$project$PeerPort$initPeer = _Platform_outgoingPort(
 				[
 					_Utils_Tuple2(
 					'connectId',
-					$elm$json$Json$Encode$string($.bd)),
+					$elm$json$Json$Encode$string($.bf)),
 					_Utils_Tuple2(
 					'isHost',
 					$elm$json$Json$Encode$bool($.f)),
 					_Utils_Tuple2(
 					'username',
-					$elm$json$Json$Encode$string($.o)),
+					$elm$json$Json$Encode$string($.l)),
 					_Utils_Tuple2(
 					'uuid',
-					$elm$json$Json$Encode$int($.k))
+					$elm$json$Json$Encode$int($.g))
 				]));
 	});
 var $elm$core$Maybe$map = F2(
@@ -11018,7 +11046,7 @@ var $author$project$Model$replaceWithLoaded = F2(
 			if (!loadingDests.a.$) {
 				var title = loadingDests.a.a;
 				var rest = loadingDests.b;
-				return _Utils_eq(dest.x, title) ? A2(
+				return _Utils_eq(dest.u, title) ? A2(
 					$elm$core$List$cons,
 					$author$project$Model$Loaded(dest),
 					rest) : A2(
@@ -11037,6 +11065,64 @@ var $author$project$Model$replaceWithLoaded = F2(
 			return _List_Nil;
 		}
 	});
+var $elm$core$Dict$map = F2(
+	function (func, dict) {
+		if (dict.$ === -2) {
+			return $elm$core$Dict$RBEmpty_elm_builtin;
+		} else {
+			var color = dict.a;
+			var key = dict.b;
+			var value = dict.c;
+			var left = dict.d;
+			var right = dict.e;
+			return A5(
+				$elm$core$Dict$RBNode_elm_builtin,
+				color,
+				key,
+				A2(func, key, value),
+				A2($elm$core$Dict$map, func, left),
+				A2($elm$core$Dict$map, func, right));
+		}
+	});
+var $author$project$PeerPort$newGame = function (msg) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				'newGame',
+				$elm$json$Json$Encode$string(msg))
+			]));
+};
+var $author$project$Main$reset = function (model) {
+	var signalPeers = model.a.f ? $author$project$PeerPort$sendData(
+		$author$project$PeerPort$newGame(model.a.l + ' wants a new game')) : $elm$core$Platform$Cmd$none;
+	var newPeerDict = function () {
+		var resetPeer = function (peer) {
+			return _Utils_update(
+				$author$project$Model$emptyPeer,
+				{f: peer.f, l: peer.l, g: peer.g});
+		};
+		return A2(
+			$elm$core$Dict$map,
+			F2(
+				function (_v1, p) {
+					return resetPeer(p);
+				}),
+			model.i);
+	}();
+	var newGameState = {z: _List_Nil, t: _List_Nil, N: _List_Nil, H: 0};
+	var resetModel = _Utils_update(
+		model,
+		{D: _List_Nil, R: false, o: newGameState, S: _List_Nil, i: newPeerDict, X: '', h: $author$project$Model$Preview});
+	var _v0 = $author$project$Main$createGame(resetModel);
+	var newModel = _v0.a;
+	var cmd = _v0.b;
+	return _Utils_Tuple2(
+		newModel,
+		$elm$core$Platform$Cmd$batch(
+			_List_fromArray(
+				[cmd, signalPeers])));
+};
 var $author$project$PeerPort$gameStarted = function (msg) {
 	return A2(
 		$author$project$PeerPort$createMsg,
@@ -11069,29 +11155,29 @@ var $author$project$Main$transition = $elm$core$Platform$Cmd$batch(
 	_List_fromArray(
 		[$author$project$Main$activateTooltips, $author$project$Main$goBackToTop]));
 var $author$project$Main$startGame = function (model) {
-	var _v0 = model.R;
+	var _v0 = model.D;
 	if (_v0.b) {
 		var start = _v0.a;
 		var destinations = _v0.b;
 		var startReachSignal = $author$project$PeerPort$sendData(
-			A2($author$project$PeerPort$titleReach, model.b.k, start.x));
-		var startGameSignal = model.b.f ? $author$project$PeerPort$sendData(
-			$author$project$PeerPort$gameStarted(model.b.o + ' started the game')) : $elm$core$Platform$Cmd$none;
+			A2($author$project$PeerPort$titleReach, model.a.g, start.u));
+		var startGameSignal = model.a.f ? $author$project$PeerPort$sendData(
+			$author$project$PeerPort$gameStarted(model.a.l + ' started the game')) : $elm$core$Platform$Cmd$none;
 		var gameState = {
-			I: _List_fromArray(
+			z: _List_fromArray(
 				[start]),
-			w: _List_fromArray(
+			t: _List_fromArray(
 				[start]),
-			M: destinations,
-			O: 0
+			N: destinations,
+			H: 0
 		};
 		return _Utils_Tuple2(
 			_Utils_update(
 				model,
 				{
-					ac: true,
-					s: gameState,
-					l: $author$project$Model$InPage(start)
+					R: true,
+					o: gameState,
+					h: $author$project$Model$InPage(start)
 				}),
 			$elm$core$Platform$Cmd$batch(
 				_List_fromArray(
@@ -11101,7 +11187,7 @@ var $author$project$Main$startGame = function (model) {
 			_Utils_update(
 				model,
 				{
-					l: $author$project$Model$Bad('Can\'t start game with 0 destinations')
+					h: $author$project$Model$Bad('Can\'t start game with 0 destinations')
 				}),
 			$elm$core$Platform$Cmd$none);
 	}
@@ -11120,102 +11206,99 @@ var $elm$core$Dict$values = function (dict) {
 var $author$project$Main$update = F2(
 	function (msg, model) {
 		switch (msg.$) {
-			case 6:
+			case 7:
 				var options = msg.a;
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{b: options}),
+						{a: options}),
 					$elm$core$Platform$Cmd$none);
-			case 7:
+			case 8:
 				var seed = msg.a;
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{Z: seed}),
+						{X: seed}),
 					$elm$core$Platform$Cmd$none);
 			case 5:
 				return $author$project$Main$startGame(model);
 			case 1:
 				if (!msg.b.$) {
 					var page = msg.b.a;
-					var newLoadingDests = A2($author$project$Model$replaceWithLoaded, page, model.Y);
-					var newDests = A2($elm$core$List$all, $author$project$Model$destIsLoaded, newLoadingDests) ? $author$project$Model$extractLoadedDestinations(newLoadingDests) : model.R;
-					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{R: newDests, Y: newLoadingDests}),
-						$elm$core$Platform$Cmd$none);
+					var newLoadingDests = A2($author$project$Model$replaceWithLoaded, page, model.S);
+					var allDestsLoaded = $author$project$Model$doneLoading(newLoadingDests);
+					var newDests = allDestsLoaded ? $author$project$Model$extractLoadedDestinations(newLoadingDests) : model.D;
+					var newModel = _Utils_update(
+						model,
+						{D: newDests, S: newLoadingDests});
+					return (model.R && allDestsLoaded) ? $author$project$Main$startGame(newModel) : _Utils_Tuple2(newModel, $elm$core$Platform$Cmd$none);
 				} else {
 					var title = msg.a;
 					return _Utils_Tuple2(
 						_Utils_update(
 							model,
 							{
-								l: $author$project$Model$Bad('Ran into issue getting description for ' + title)
+								h: $author$project$Model$Bad('Ran into issue getting description for ' + title)
 							}),
 						$elm$core$Platform$Cmd$none);
 				}
 			case 0:
 				if (!msg.b.$) {
 					var page = msg.b.a;
-					var state = model.s;
+					var state = model.o;
 					var signalTitleReached = $author$project$PeerPort$sendData(
-						A2($author$project$PeerPort$titleReach, model.b.k, page.x));
-					var newPath = A2($elm$core$List$cons, page, model.s.w);
+						A2($author$project$PeerPort$titleReach, model.a.g, page.u));
+					var newPath = A2($elm$core$List$cons, page, model.o.t);
 					var signalGameFinished = $author$project$PeerPort$sendData(
 						A3(
 							$author$project$PeerPort$gameFinish,
-							model.b.k,
+							model.a.g,
 							A2(
 								$elm$core$List$map,
 								function ($) {
-									return $.x;
+									return $.u;
 								},
 								newPath),
-							state.O));
-					var _v1 = state.M;
+							state.H));
+					var _v1 = state.N;
 					if (_v1.b) {
 						var dest = _v1.a;
 						var restOfDests = _v1.b;
-						var newGameState = _Utils_eq(page.x, dest.x) ? _Utils_update(
+						var newGameState = _Utils_eq(page.u, dest.u) ? _Utils_update(
 							state,
 							{
-								I: A2($elm$core$List$cons, dest, state.I),
-								w: newPath,
-								M: restOfDests
+								z: A2($elm$core$List$cons, dest, state.z),
+								t: newPath,
+								N: restOfDests
 							}) : _Utils_update(
 							state,
-							{w: newPath});
-						var isPathCompleted = _Utils_eq(page.x, dest.x) && $elm$core$List$isEmpty(restOfDests);
-						var signal = isPathCompleted ? $elm$core$Platform$Cmd$batch(
-							_List_fromArray(
-								[signalGameFinished, signalTitleReached])) : (_Utils_eq(page.x, dest.x) ? signalTitleReached : $elm$core$Platform$Cmd$none);
+							{t: newPath});
+						var isPathCompleted = _Utils_eq(page.u, dest.u) && $elm$core$List$isEmpty(restOfDests);
 						return isPathCompleted ? _Utils_Tuple2(
 							_Utils_update(
 								model,
 								{
-									s: newGameState,
-									l: $author$project$Model$Review(model.b.k)
+									o: newGameState,
+									h: $author$project$Model$Review(model.a.g)
 								}),
 							$elm$core$Platform$Cmd$batch(
 								_List_fromArray(
-									[signal, $author$project$Main$transition]))) : _Utils_Tuple2(
+									[signalGameFinished, signalTitleReached, $author$project$Main$transition]))) : _Utils_Tuple2(
 							_Utils_update(
 								model,
 								{
-									s: newGameState,
-									l: $author$project$Model$InPage(page)
+									o: newGameState,
+									h: $author$project$Model$InPage(page)
 								}),
 							$elm$core$Platform$Cmd$batch(
 								_List_fromArray(
-									[signal, $author$project$Main$transition])));
+									[signalTitleReached, $author$project$Main$transition])));
 					} else {
 						return _Utils_Tuple2(
 							_Utils_update(
 								model,
 								{
-									l: $author$project$Model$Bad('Why are we out of destinations?')
+									h: $author$project$Model$Bad('Why are we out of destinations?')
 								}),
 							$elm$core$Platform$Cmd$none);
 					}
@@ -11225,7 +11308,7 @@ var $author$project$Main$update = F2(
 						_Utils_update(
 							model,
 							{
-								l: $author$project$Model$Bad('Http error while fetching ' + title)
+								h: $author$project$Model$Bad('Http error while fetching ' + title)
 							}),
 						$elm$core$Platform$Cmd$none);
 				}
@@ -11235,39 +11318,39 @@ var $author$project$Main$update = F2(
 					_Utils_update(
 						model,
 						{
-							l: $author$project$Model$Fetching(title)
+							h: $author$project$Model$Fetching(title)
 						}),
 					$author$project$Main$getPage(title));
-			case 8:
-				var state = model.s;
-				var _v2 = state.w;
+			case 9:
+				var state = model.o;
+				var _v2 = state.t;
 				if (_v2.b && _v2.b.b) {
 					var currentPage = _v2.a;
 					var _v3 = _v2.b;
 					var prevPage = _v3.a;
 					var rest = _v3.b;
 					if (_Utils_eq(
-						$elm$core$List$head(state.w),
-						$elm$core$List$head(state.I))) {
+						$elm$core$List$head(state.t),
+						$elm$core$List$head(state.z))) {
 						var newState = _Utils_update(
 							state,
 							{
-								I: A3(
+								z: A3(
 									$author$project$Helpers$popBy,
 									function ($) {
-										return $.x;
+										return $.u;
 									},
 									currentPage,
-									state.I),
-								w: A2($elm$core$List$cons, prevPage, rest),
-								M: A2($elm$core$List$cons, currentPage, state.M)
+									state.z),
+								t: A2($elm$core$List$cons, prevPage, rest),
+								N: A2($elm$core$List$cons, currentPage, state.N)
 							});
 						return _Utils_Tuple2(
 							_Utils_update(
 								model,
 								{
-									s: newState,
-									l: $author$project$Model$InPage(prevPage)
+									o: newState,
+									h: $author$project$Model$InPage(prevPage)
 								}),
 							$author$project$Main$transition);
 					} else {
@@ -11275,64 +11358,64 @@ var $author$project$Main$update = F2(
 							_Utils_update(
 								model,
 								{
-									s: _Utils_update(
+									o: _Utils_update(
 										state,
 										{
-											w: A2($elm$core$List$cons, prevPage, rest)
+											t: A2($elm$core$List$cons, prevPage, rest)
 										}),
-									l: $author$project$Model$InPage(prevPage)
+									h: $author$project$Model$InPage(prevPage)
 								}),
 							$author$project$Main$transition);
 					}
 				} else {
 					return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
 				}
-			case 9:
-				var state = model.s;
+			case 10:
+				var state = model.o;
 				var newState = _Utils_update(
 					state,
-					{O: state.O + 1});
+					{H: state.H + 1});
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{s: newState}),
+						{o: newState}),
 					$elm$core$Platform$Cmd$none);
-			case 13:
+			case 15:
 				return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
 			case 4:
-				if (_Utils_eq(model.Z, model.b.z)) {
+				if (_Utils_eq(model.X, model.a.A)) {
 					return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
 				} else {
-					var options = model.b;
+					var options = model.a;
 					var newModel = _Utils_update(
 						model,
 						{
-							b: _Utils_update(
+							a: _Utils_update(
 								options,
-								{z: model.Z})
+								{A: model.X})
 						});
 					return $author$project$Main$createGame(newModel);
 				}
 			case 3:
 				var flag = msg.a;
-				if ($elm$core$String$isEmpty(model.b.o)) {
+				if ($elm$core$String$isEmpty(model.a.l)) {
 					return _Utils_Tuple2(
 						model,
 						$author$project$Main$makeToast('You must give a username!'));
 				} else {
-					if ((!flag.f) && $elm$core$String$isEmpty(model.b.X)) {
+					if ((!flag.f) && $elm$core$String$isEmpty(model.a.ab)) {
 						return _Utils_Tuple2(
 							model,
 							$author$project$Main$makeToast('You have to provide the host\'s game ID to join their game'));
 					} else {
 						var newOptions = function () {
-							var options = model.b;
+							var options = model.a;
 							return _Utils_update(
 								options,
 								{f: flag.f});
 						}();
 						var initPeerCmd = $author$project$PeerPort$initPeer(
-							{bd: model.b.X, f: flag.f, o: model.b.o, k: model.b.k});
+							{bf: model.a.ab, f: flag.f, l: model.a.l, g: model.a.g});
 						var _v4 = $author$project$Main$createGame(model);
 						var previewModel = _v4.a;
 						var cmd = _v4.b;
@@ -11340,16 +11423,16 @@ var $author$project$Main$update = F2(
 							_Utils_update(
 								previewModel,
 								{
-									b: _Utils_update(
+									a: _Utils_update(
 										newOptions,
-										{X: ''})
+										{ab: ''})
 								}),
 							$elm$core$Platform$Cmd$batch(
 								_List_fromArray(
 									[cmd, initPeerCmd]))) : _Utils_Tuple2(
 							_Utils_update(
 								model,
-								{b: newOptions}),
+								{a: newOptions}),
 							$elm$core$Platform$Cmd$batch(
 								_List_fromArray(
 									[
@@ -11358,51 +11441,99 @@ var $author$project$Main$update = F2(
 									])));
 					}
 				}
-			case 10:
+			case 12:
+				var uuid = msg.a;
+				var options = model.a;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							a: _Utils_update(
+								options,
+								{g: uuid})
+						}),
+					$elm$core$Platform$Cmd$none);
+			case 14:
+				var uuid = msg.a;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							h: $author$project$Model$Review(uuid)
+						}),
+					$elm$core$Platform$Cmd$none);
+			case 6:
+				var peerMsg = $author$project$PeerPort$sendData(
+					A3(
+						$author$project$PeerPort$gameFinish,
+						model.a.g,
+						A2(
+							$elm$core$List$map,
+							function ($) {
+								return $.u;
+							},
+							model.o.t),
+						model.o.H));
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							h: $author$project$Model$Review(model.a.g)
+						}),
+					peerMsg);
+			case 13:
+				return model.a.f ? $author$project$Main$reset(model) : _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							h: $author$project$Model$Bad('Only hosts can start new games')
+						}),
+					$elm$core$Platform$Cmd$none);
+			default:
 				switch (msg.a.$) {
-					case 7:
+					case 8:
 						var id = msg.a.a;
-						var options = model.b;
+						var options = model.a;
 						return _Utils_Tuple2(
 							_Utils_update(
 								model,
 								{
-									b: _Utils_update(
+									a: _Utils_update(
 										options,
-										{aG: id})
+										{aI: id})
 								}),
 							$elm$core$Platform$Cmd$none);
 					case 0:
 						var _v5 = msg.a;
 						var num = _v5.a;
 						var seed = _v5.b;
-						if (model.b.f) {
+						if (model.a.f) {
 							return _Utils_Tuple2(
 								_Utils_update(
 									model,
 									{
-										l: $author$project$Model$Bad('Host shouldnt be receiving seedinfo')
+										h: $author$project$Model$Bad('Host shouldnt be receiving seedinfo')
 									}),
 								$elm$core$Platform$Cmd$none);
 						} else {
-							var options = model.b;
+							var options = model.a;
 							return $author$project$Main$createGame(
 								_Utils_update(
 									model,
 									{
-										b: _Utils_update(
+										a: _Utils_update(
 											options,
-											{D: num, z: seed})
+											{F: num, A: seed})
 									}));
 						}
 					case 1:
 						var startMsg = msg.a.a;
-						if (model.b.f) {
+						if (model.a.f) {
 							return _Utils_Tuple2(
 								_Utils_update(
 									model,
 									{
-										l: $author$project$Model$Bad('Host shouldnt be receiving game start message')
+										h: $author$project$Model$Bad('Host shouldnt be receiving game start message')
 									}),
 								$elm$core$Platform$Cmd$none);
 						} else {
@@ -11415,14 +11546,19 @@ var $author$project$Main$update = F2(
 									return $author$project$Main$makeToast(s);
 								}
 							}();
+							var allDestsLoaded = $author$project$Model$doneLoading(model.S);
 							var _v6 = $author$project$Main$startGame(model);
 							var newModel = _v6.a;
 							var cmd = _v6.b;
-							return _Utils_Tuple2(
+							return allDestsLoaded ? _Utils_Tuple2(
 								newModel,
 								$elm$core$Platform$Cmd$batch(
 									_List_fromArray(
-										[cmd, toast])));
+										[cmd, toast]))) : _Utils_Tuple2(
+								_Utils_update(
+									model,
+									{R: true}),
+								toast);
 						}
 					case 2:
 						var _v8 = msg.a;
@@ -11431,10 +11567,21 @@ var $author$project$Main$update = F2(
 						var _v9 = A2($elm$core$Dict$get, uuid, model.i);
 						if (!_v9.$) {
 							var peer = _v9.a;
-							var updatedPeer = _Utils_update(
-								peer,
-								{bn: title});
-							var hostEcho = model.b.f ? $author$project$PeerPort$sendData(
+							var updatedPeer = function () {
+								var newLastDest = A2(
+									$elm$core$List$member,
+									title,
+									A2(
+										$elm$core$List$map,
+										function ($) {
+											return $.u;
+										},
+										model.D)) ? title : peer.K;
+								return _Utils_update(
+									peer,
+									{bh: title, K: newLastDest});
+							}();
+							var hostEcho = model.a.f ? $author$project$PeerPort$sendData(
 								A2($author$project$PeerPort$titleReach, uuid, title)) : $elm$core$Platform$Cmd$none;
 							return _Utils_Tuple2(
 								_Utils_update(
@@ -11450,60 +11597,80 @@ var $author$project$Main$update = F2(
 						var _v10 = msg.a;
 						var peerUsername = _v10.a;
 						var peerUUID = _v10.b;
-						if (_Utils_eq(peerUUID, model.b.k)) {
+						if (_Utils_eq(peerUUID, model.a.g)) {
 							return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
 						} else {
+							var toast = $author$project$Main$makeToast(peerUsername + ' joined the game');
 							var peerList = A2(
 								$elm$core$List$map,
 								function (peer) {
-									return {f: false, o: peer.o, k: peer.k};
+									return {Q: peer.Q, f: false, K: peer.K, l: peer.l, g: peer.g};
 								},
 								$elm$core$Dict$values(model.i));
-							var peerListWithHost = A2(
-								$elm$core$List$cons,
-								{f: true, o: model.b.o, k: model.b.k},
-								peerList);
+							var peerListWithHost = function () {
+								var lastDest = A2(
+									$elm$core$Maybe$withDefault,
+									'',
+									A2(
+										$elm$core$Maybe$map,
+										function ($) {
+											return $.u;
+										},
+										$elm$core$List$head(model.o.z)));
+								var finished = function () {
+									var _v11 = model.h;
+									if (_v11.$ === 4) {
+										return true;
+									} else {
+										return false;
+									}
+								}();
+								return A2(
+									$elm$core$List$cons,
+									{Q: finished, f: true, K: lastDest, l: model.a.l, g: model.a.g},
+									peerList);
+							}();
 							var newPeer = _Utils_update(
 								$author$project$Model$emptyPeer,
-								{o: peerUsername, k: peerUUID});
+								{l: peerUsername, g: peerUUID});
 							var newPeerDict = A3($elm$core$Dict$insert, peerUUID, newPeer, model.i);
 							var hostSendGameInfo = $author$project$PeerPort$sendData(
 								A2(
 									$author$project$PeerPort$gameInfo,
 									peerUUID,
-									{D: model.b.D, i: peerListWithHost, aY: model.b.z, bw: model.ac}));
+									{F: model.a.F, i: peerListWithHost, a_: model.a.A, by: model.R}));
 							var hostEcho = $author$project$PeerPort$sendData(
 								A2($author$project$PeerPort$peerConnect, peerUsername, peerUUID));
-							return model.b.f ? _Utils_Tuple2(
+							return model.a.f ? _Utils_Tuple2(
 								_Utils_update(
 									model,
 									{i: newPeerDict}),
 								$elm$core$Platform$Cmd$batch(
 									_List_fromArray(
-										[hostSendGameInfo, hostEcho]))) : _Utils_Tuple2(
+										[hostSendGameInfo, hostEcho, toast]))) : _Utils_Tuple2(
 								_Utils_update(
 									model,
 									{i: newPeerDict}),
-								$elm$core$Platform$Cmd$none);
+								toast);
 						}
 					case 5:
 						var uuid = msg.a.a;
 						var toast = function () {
-							var _v11 = A2(
+							var _v12 = A2(
 								$elm$core$Maybe$map,
 								function ($) {
-									return $.o;
+									return $.l;
 								},
 								A2($elm$core$Dict$get, uuid, model.i));
-							if (!_v11.$) {
-								var name = _v11.a;
+							if (!_v12.$) {
+								var name = _v12.a;
 								return $author$project$Main$makeToast(name + ' has left the game');
 							} else {
 								return $elm$core$Platform$Cmd$none;
 							}
 						}();
 						var newPeerDict = A2($elm$core$Dict$remove, uuid, model.i);
-						var hostEcho = model.b.f ? $author$project$PeerPort$sendData(
+						var hostEcho = model.a.f ? $author$project$PeerPort$sendData(
 							$author$project$PeerPort$peerDisconnect(uuid)) : $elm$core$Platform$Cmd$none;
 						return _Utils_Tuple2(
 							_Utils_update(
@@ -11514,117 +11681,155 @@ var $author$project$Main$update = F2(
 									[hostEcho, toast])));
 					case 6:
 						var message = msg.a.a;
-						if (model.b.f) {
+						if (model.a.f) {
 							return _Utils_Tuple2(
 								_Utils_update(
 									model,
 									{
-										l: $author$project$Model$Bad('Host connection was lost... but you\'re the host')
+										h: $author$project$Model$Bad('Host connection was lost... but you\'re the host')
 									}),
 								$elm$core$Platform$Cmd$none);
 						} else {
-							var options = model.b;
+							var options = model.a;
 							return _Utils_Tuple2(
 								_Utils_update(
 									$author$project$Main$initialModel,
-									{b: options}),
+									{a: options}),
 								$author$project$Main$makeToast(message));
 						}
 					case 3:
-						var _v12 = msg.a;
-						var peeruuid = _v12.a;
-						var path = _v12.b;
-						var time = _v12.c;
-						var _v13 = A2($elm$core$Dict$get, peeruuid, model.i);
-						if (!_v13.$) {
-							var peer = _v13.a;
+						var _v13 = msg.a;
+						var peeruuid = _v13.a;
+						var path = _v13.b;
+						var time = _v13.c;
+						var _v14 = A2($elm$core$Dict$get, peeruuid, model.i);
+						if (!_v14.$) {
+							var peer = _v14.a;
 							var updatedPeer = _Utils_update(
 								peer,
-								{w: path, O: time});
+								{Q: true, t: path, H: time});
+							var peerGotToEnd = _Utils_eq(
+								A2(
+									$elm$core$Basics$composeR,
+									$elm$core$List$reverse,
+									A2(
+										$elm$core$Basics$composeR,
+										$elm$core$List$head,
+										$elm$core$Maybe$map(
+											function ($) {
+												return $.u;
+											})))(model.D),
+								$elm$core$List$head(path));
+							var toast = peerGotToEnd ? (peer.l + ' has finished!') : (peer.l + ' gave up');
+							var hostEcho = model.a.f ? $author$project$PeerPort$sendData(
+								A3($author$project$PeerPort$gameFinish, peeruuid, path, time)) : $elm$core$Platform$Cmd$none;
 							return _Utils_Tuple2(
 								_Utils_update(
 									model,
 									{
 										i: A3($elm$core$Dict$insert, peeruuid, updatedPeer, model.i)
 									}),
-								$author$project$Main$makeToast(peer.o + ' has finished!'));
-						} else {
-							return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
-						}
-					case 9:
-						var _v14 = msg.a;
-						var uuid = _v14.a;
-						var info = _v14.b;
-						if (_Utils_eq(uuid, model.b.k)) {
-							var options = model.b;
-							var addPeerToDict = F2(
-								function (peer, dict) {
-									return A3(
-										$elm$core$Dict$insert,
-										peer.k,
-										_Utils_update(
-											$author$project$Model$emptyPeer,
-											{f: peer.f, o: peer.o, k: peer.k}),
-										dict);
-								});
-							var newPeerDict = A3($elm$core$List$foldl, addPeerToDict, model.i, info.i);
-							var newModel = _Utils_update(
-								model,
-								{
-									b: _Utils_update(
-										options,
-										{D: info.D, z: info.aY}),
-									i: newPeerDict
-								});
-							return $author$project$Main$createGame(newModel);
+								$elm$core$Platform$Cmd$batch(
+									_List_fromArray(
+										[
+											hostEcho,
+											$author$project$Main$makeToast(toast)
+										])));
 						} else {
 							return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
 						}
 					case 10:
+						var _v15 = msg.a;
+						var uuid = _v15.a;
+						var info = _v15.b;
+						if (_Utils_eq(uuid, model.a.g)) {
+							var options = model.a;
+							var hostName = A2(
+								$elm$core$Basics$composeR,
+								$elm$core$List$filter(
+									function ($) {
+										return $.f;
+									}),
+								A2(
+									$elm$core$Basics$composeR,
+									$elm$core$List$head,
+									A2(
+										$elm$core$Basics$composeR,
+										$elm$core$Maybe$map(
+											function ($) {
+												return $.l;
+											}),
+										$elm$core$Maybe$withDefault('???'))))(info.i);
+							var addPeerToDict = F2(
+								function (peer, dict) {
+									return A3(
+										$elm$core$Dict$insert,
+										peer.g,
+										_Utils_update(
+											$author$project$Model$emptyPeer,
+											{Q: peer.Q, f: peer.f, K: peer.K, l: peer.l, g: peer.g}),
+										dict);
+								});
+							var newPeerDict = A3($elm$core$List$foldl, addPeerToDict, model.i, info.i);
+							var _v16 = $author$project$Main$createGame(
+								_Utils_update(
+									model,
+									{
+										a: _Utils_update(
+											options,
+											{F: info.F, A: info.a_}),
+										i: newPeerDict
+									}));
+							var newModel = _v16.a;
+							var cmd = _v16.b;
+							return _Utils_Tuple2(
+								newModel,
+								$elm$core$Platform$Cmd$batch(
+									_List_fromArray(
+										[
+											cmd,
+											$author$project$Main$makeToast('You joined ' + (hostName + '\'s game'))
+										])));
+						} else {
+							return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
+						}
+					case 11:
 						var errorString = msg.a.a;
 						return _Utils_Tuple2(
 							_Utils_update(
 								model,
 								{
-									l: $author$project$Model$Bad(errorString)
+									h: $author$project$Model$Bad(errorString)
 								}),
 							$elm$core$Platform$Cmd$none);
-					default:
+					case 9:
 						var err = msg.a.a;
 						return _Utils_Tuple2(
 							model,
 							$author$project$Main$makeToast(err));
+					default:
+						var str = msg.a.a;
+						var toast = $author$project$Main$makeToast(str);
+						var _v17 = $author$project$Main$reset(model);
+						var newModel = _v17.a;
+						var cmd = _v17.b;
+						return _Utils_Tuple2(
+							newModel,
+							$elm$core$Platform$Cmd$batch(
+								_List_fromArray(
+									[cmd, toast])));
 				}
-			case 11:
-				var uuid = msg.a;
-				var options = model.b;
-				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							b: _Utils_update(
-								options,
-								{k: uuid})
-						}),
-					$elm$core$Platform$Cmd$none);
-			default:
-				var uuid = msg.a;
-				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							l: $author$project$Model$Review(uuid)
-						}),
-					$elm$core$Platform$Cmd$none);
 		}
 	});
 var $author$project$Model$ChangeSeedWhileInPreview = function (a) {
-	return {$: 7, a: a};
+	return {$: 8, a: a};
 };
-var $author$project$Model$GoBack = {$: 8};
+var $author$project$Model$ClickedNewGame = {$: 13};
+var $author$project$Model$GiveUp = {$: 6};
+var $author$project$Model$GoBack = {$: 9};
 var $author$project$Model$Refresh = {$: 4};
 var $author$project$Model$ReviewPlayer = function (a) {
-	return {$: 12, a: a};
+	return {$: 14, a: a};
 };
 var $author$project$Model$StartGame = {$: 5};
 var $elm$html$Html$a = _VirtualDom_node('a');
@@ -11656,17 +11861,6 @@ var $elm$html$Html$Attributes$boolProperty = F2(
 	});
 var $elm$html$Html$Attributes$disabled = $elm$html$Html$Attributes$boolProperty('disabled');
 var $elm$html$Html$div = _VirtualDom_node('div');
-var $elm$core$List$filter = F2(
-	function (isGood, list) {
-		return A3(
-			$elm$core$List$foldr,
-			F2(
-				function (x, xs) {
-					return isGood(x) ? A2($elm$core$List$cons, x, xs) : xs;
-				}),
-			_List_Nil,
-			list);
-	});
 var $elm$html$Html$h1 = _VirtualDom_node('h1');
 var $elm$html$Html$h2 = _VirtualDom_node('h2');
 var $elm$html$Html$h3 = _VirtualDom_node('h3');
@@ -12086,19 +12280,19 @@ var $author$project$Views$viewPagePreviews = function (dests) {
 									_List_Nil,
 									_List_fromArray(
 										[
-											$elm$html$Html$text(loadedPage.x)
+											$elm$html$Html$text(loadedPage.u)
 										])),
 									resizedImg(
 									A2(
 										$elm$core$Maybe$withDefault,
 										$elm$html$Html$text(''),
-										A2($elm$core$Maybe$map, $author$project$Views$viewNode, loadedPage.ad))),
+										A2($elm$core$Maybe$map, $author$project$Views$viewNode, loadedPage.af))),
 									A2(
 									$elm$html$Html$i,
 									_List_Nil,
 									_List_fromArray(
 										[
-											$elm$html$Html$text(loadedPage.aa)
+											$elm$html$Html$text(loadedPage.ad)
 										]))
 								]);
 						}
@@ -12132,8 +12326,8 @@ var $author$project$Helpers$Up = 0;
 var $author$project$Helpers$uparrow = function (size) {
 	return A2($author$project$Helpers$arrow, 0, size);
 };
-var $author$project$Views$viewPath = F3(
-	function (titles, dests, reversed) {
+var $author$project$Views$viewPath = F2(
+	function (titles, dests) {
 		var toText = function (title) {
 			return A2($elm$core$List$member, title, dests) ? A2(
 				$elm$html$Html$b,
@@ -12144,10 +12338,10 @@ var $author$project$Views$viewPath = F3(
 					])) : $elm$html$Html$text(title);
 		};
 		var titleTexts = A2($elm$core$List$map, toText, titles);
-		var withArrows = function () {
-			var arrow = reversed ? $author$project$Helpers$uparrow(2) : $author$project$Helpers$downarrow(2);
-			return A2($elm$core$List$intersperse, arrow, titleTexts);
-		}();
+		var withArrows = A2(
+			$elm$core$List$intersperse,
+			$author$project$Helpers$uparrow(2),
+			titleTexts);
 		return A2(
 			$elm$html$Html$div,
 			_List_fromArray(
@@ -12169,10 +12363,10 @@ var $author$project$Views$viewPeerLocs = function (peers) {
 						_List_Nil,
 						_List_fromArray(
 							[
-								$elm$html$Html$text(peer.o)
+								$elm$html$Html$text(peer.l)
 							])),
 						A2($elm$html$Html$br, _List_Nil, _List_Nil),
-						$elm$html$Html$text(peer.bn)
+						$elm$html$Html$text(peer.K)
 					])));
 	};
 	var theView = A2(
@@ -12190,15 +12384,38 @@ var $author$project$Views$viewPeerLocs = function (peers) {
 var $author$project$Model$ClickedJoinOrHost = function (a) {
 	return {$: 3, a: a};
 };
+var $elm$html$Html$small = _VirtualDom_node('small');
+var $author$project$Views$backToMyPageLink = A2(
+	$elm$html$Html$small,
+	_List_fromArray(
+		[
+			$elm$html$Html$Attributes$class('d-inline m-2'),
+			A2($elm$html$Html$Attributes$style, 'float', 'right')
+		]),
+	_List_fromArray(
+		[
+			$elm$html$Html$text('go back to '),
+			A2(
+			$elm$html$Html$a,
+			_List_fromArray(
+				[
+					$elm$html$Html$Attributes$class('wikilink'),
+					$elm$html$Html$Attributes$href('https://nicolaswinsten.github.io')
+				]),
+			_List_fromArray(
+				[
+					$elm$html$Html$text('my page')
+				]))
+		]));
 var $author$project$Model$ChangeOptions = function (a) {
-	return {$: 6, a: a};
+	return {$: 7, a: a};
 };
 var $author$project$Model$changeJoinId = F2(
 	function (options, id) {
 		return $author$project$Model$ChangeOptions(
 			_Utils_update(
 				options,
-				{X: id}));
+				{ab: id}));
 	});
 var $author$project$Model$changeNumDestinations = F2(
 	function (options, num) {
@@ -12206,7 +12423,7 @@ var $author$project$Model$changeNumDestinations = F2(
 			_Utils_update(
 				options,
 				{
-					D: A2(
+					F: A2(
 						$elm$core$Maybe$withDefault,
 						3,
 						$elm$core$String$toInt(num))
@@ -12217,17 +12434,18 @@ var $author$project$Model$changeSeed = F2(
 		return $author$project$Model$ChangeOptions(
 			_Utils_update(
 				options,
-				{z: seedStr}));
+				{A: seedStr}));
 	});
 var $author$project$Model$changeUsername = F2(
 	function (options, string) {
 		return $author$project$Model$ChangeOptions(
 			_Utils_update(
 				options,
-				{o: string}));
+				{l: string}));
 	});
 var $elm$html$Html$Attributes$for = $elm$html$Html$Attributes$stringProperty('htmlFor');
 var $elm$html$Html$label = _VirtualDom_node('label');
+var $elm$html$Html$li = _VirtualDom_node('li');
 var $elm$html$Html$Attributes$min = $elm$html$Html$Attributes$stringProperty('min');
 var $elm$html$Html$p = _VirtualDom_node('p');
 var $elm$core$List$repeatHelp = F3(
@@ -12251,8 +12469,8 @@ var $elm$core$List$repeat = F2(
 	function (n, value) {
 		return A3($elm$core$List$repeatHelp, _List_Nil, n, value);
 	});
-var $elm$html$Html$small = _VirtualDom_node('small');
 var $elm$html$Html$Attributes$type_ = $elm$html$Html$Attributes$stringProperty('type');
+var $elm$html$Html$ul = _VirtualDom_node('ul');
 var $elm$html$Html$Attributes$width = function (n) {
 	return A2(
 		_VirtualDom_attribute,
@@ -12260,6 +12478,54 @@ var $elm$html$Html$Attributes$width = function (n) {
 		$elm$core$String$fromInt(n));
 };
 var $author$project$Views$viewWelcome = function (options) {
+	var notesSection = $author$project$Helpers$singleRow(
+		A2(
+			$elm$html$Html$div,
+			_List_fromArray(
+				[
+					$elm$html$Html$Attributes$class('m-3')
+				]),
+			_List_fromArray(
+				[
+					A2(
+					$elm$html$Html$h3,
+					_List_Nil,
+					_List_fromArray(
+						[
+							$elm$html$Html$text('Notes')
+						])),
+					A2(
+					$elm$html$Html$ul,
+					_List_Nil,
+					_List_fromArray(
+						[
+							A2(
+							$elm$html$Html$li,
+							_List_Nil,
+							_List_fromArray(
+								[
+									$elm$html$Html$text('This game was built with Elm and PeerJS. '),
+									A2(
+									$elm$html$Html$a,
+									_List_fromArray(
+										[
+											$elm$html$Html$Attributes$class('wikilink'),
+											$elm$html$Html$Attributes$href('https://github.com/NicolasWinsten/racer')
+										]),
+									_List_fromArray(
+										[
+											$elm$html$Html$text('source code')
+										]))
+								])),
+							A2(
+							$elm$html$Html$li,
+							_List_Nil,
+							_List_fromArray(
+								[
+									$elm$html$Html$text('All feedback and complaints go to nicolasd DOT winsten AT gmail DOT com')
+								]))
+						]))
+				])));
 	var joinGameSection = A2(
 		$elm$html$Html$div,
 		_List_Nil,
@@ -12287,7 +12553,7 @@ var $author$project$Views$viewWelcome = function (options) {
 								$elm$html$Html$Attributes$id('joinid'),
 								$elm$html$Html$Attributes$class('form-control'),
 								$elm$html$Html$Attributes$placeholder('Join ID'),
-								$elm$html$Html$Attributes$value(options.X),
+								$elm$html$Html$Attributes$value(options.ab),
 								$elm$html$Html$Events$onInput(
 								$author$project$Model$changeJoinId(options))
 							]),
@@ -12344,7 +12610,7 @@ var $author$project$Views$viewWelcome = function (options) {
 								$elm$html$Html$Attributes$class('form-control'),
 								$elm$html$Html$Attributes$id('seed'),
 								$elm$html$Html$Attributes$placeholder('Game Seed'),
-								$elm$html$Html$Attributes$value(options.z),
+								$elm$html$Html$Attributes$value(options.A),
 								$elm$html$Html$Events$onInput(
 								$author$project$Model$changeSeed(options))
 							]),
@@ -12372,7 +12638,7 @@ var $author$project$Views$viewWelcome = function (options) {
 								$elm$html$Html$Attributes$id('numDests'),
 								$elm$html$Html$Attributes$type_('number'),
 								$elm$html$Html$Attributes$value(
-								$elm$core$String$fromInt(options.D)),
+								$elm$core$String$fromInt(options.F)),
 								$elm$html$Html$Attributes$min('2'),
 								$elm$html$Html$Events$onInput(
 								$author$project$Model$changeNumDestinations(options))
@@ -12453,7 +12719,7 @@ var $author$project$Views$viewWelcome = function (options) {
 												$elm$html$Html$Attributes$id('username'),
 												$elm$html$Html$Attributes$class('form-control'),
 												$elm$html$Html$Attributes$placeholder('username'),
-												$elm$html$Html$Attributes$value(options.o),
+												$elm$html$Html$Attributes$value(options.l),
 												$elm$html$Html$Events$onInput(
 												$author$project$Model$changeUsername(options))
 											]),
@@ -12520,27 +12786,7 @@ var $author$project$Views$viewWelcome = function (options) {
 		_List_Nil,
 		_List_fromArray(
 			[
-				A2(
-				$elm$html$Html$small,
-				_List_fromArray(
-					[
-						$elm$html$Html$Attributes$class('d-inline'),
-						A2($elm$html$Html$Attributes$style, 'float', 'right')
-					]),
-				_List_fromArray(
-					[
-						$elm$html$Html$text('go back to '),
-						A2(
-						$elm$html$Html$a,
-						_List_fromArray(
-							[
-								$elm$html$Html$Attributes$href('https://nicolaswinsten.com')
-							]),
-						_List_fromArray(
-							[
-								$elm$html$Html$text('my page')
-							]))
-					])),
+				$author$project$Views$backToMyPageLink,
 				A2(
 				$elm$html$Html$div,
 				_List_fromArray(
@@ -12595,17 +12841,19 @@ var $author$project$Views$viewWelcome = function (options) {
 											_List_fromArray(
 												[joinGameSection]))
 										]))
-								])))
+								]))),
+						A2($elm$html$Html$hr, _List_Nil, _List_Nil),
+						notesSection
 					]))
 			]));
 };
 var $author$project$Views$view = function (model) {
-	var _v0 = model.l;
+	var _v0 = model.h;
 	switch (_v0.$) {
 		case 2:
-			return $author$project$Views$viewWelcome(model.b);
+			return $author$project$Views$viewWelcome(model.a);
 		case 3:
-			var refreshDisabled = _Utils_eq(model.Z, model.b.z);
+			var refreshDisabled = _Utils_eq(model.X, model.a.A);
 			var peersView = function () {
 				var peerEl = function (peer) {
 					return $author$project$Helpers$singleRow(
@@ -12615,7 +12863,7 @@ var $author$project$Views$view = function (model) {
 							_List_fromArray(
 								[
 									$elm$html$Html$text(
-									peer.f ? ('Host: ' + peer.o) : ('' + peer.o))
+									peer.f ? ('Host: ' + peer.l) : ('' + peer.l))
 								])));
 				};
 				var peerList = A2(
@@ -12643,8 +12891,7 @@ var $author$project$Views$view = function (model) {
 							A2($elm$html$Html$hr, _List_Nil, _List_Nil),
 							peerList)));
 			}();
-			var doneLoading = A2($elm$core$List$all, $author$project$Model$destIsLoaded, model.Y);
-			var copyIdBox = model.b.f ? A2(
+			var copyIdBox = model.a.f ? A2(
 				$elm$html$Html$div,
 				_List_fromArray(
 					[
@@ -12666,7 +12913,7 @@ var $author$project$Views$view = function (model) {
 								_List_fromArray(
 									[
 										$elm$html$Html$Attributes$id('hostid'),
-										$elm$html$Html$Attributes$value(model.b.aG),
+										$elm$html$Html$Attributes$value(model.a.aI),
 										$elm$html$Html$Attributes$readonly(true)
 									]),
 								_List_Nil),
@@ -12692,7 +12939,8 @@ var $author$project$Views$view = function (model) {
 									]))
 							]))
 					])) : $elm$html$Html$text('');
-			var _v1 = (doneLoading && model.b.f) ? _Utils_Tuple2(
+			var allDestsLoaded = $author$project$Model$doneLoading(model.S);
+			var _v1 = (allDestsLoaded && model.a.f) ? _Utils_Tuple2(
 				A2(
 					$elm$html$Html$button,
 					_List_fromArray(
@@ -12717,7 +12965,7 @@ var $author$project$Views$view = function (model) {
 							_List_fromArray(
 								[
 									$elm$html$Html$Attributes$placeholder('new game seed'),
-									$elm$html$Html$Attributes$value(model.Z),
+									$elm$html$Html$Attributes$value(model.X),
 									$elm$html$Html$Events$onInput($author$project$Model$ChangeSeedWhileInPreview)
 								]),
 							_List_Nil),
@@ -12732,7 +12980,7 @@ var $author$project$Views$view = function (model) {
 								[
 									$elm$html$Html$text('Refresh')
 								]))
-						]))) : (model.b.f ? _Utils_Tuple2(
+						]))) : (model.a.f ? _Utils_Tuple2(
 				$elm$html$Html$text('Waiting for destinations to finish loading...'),
 				$elm$html$Html$text('')) : _Utils_Tuple2(
 				$elm$html$Html$text('Waiting for host to start game...'),
@@ -12764,7 +13012,7 @@ var $author$project$Views$view = function (model) {
 									]),
 								_List_fromArray(
 									[
-										$author$project$Views$viewPagePreviews(model.Y)
+										$author$project$Views$viewPagePreviews(model.S)
 									])),
 								A2(
 								$elm$html$Html$div,
@@ -12795,10 +13043,10 @@ var $author$project$Views$view = function (model) {
 						A2(
 							$elm$core$List$cons,
 							A2($elm$html$Html$Attributes$style, 'font-size', '1.1em'),
-							$author$project$Views$toolTipStyles(dest.aa))),
+							$author$project$Views$toolTipStyles(dest.ad))),
 					_List_fromArray(
 						[
-							$elm$html$Html$text(dest.x)
+							$elm$html$Html$text(dest.u)
 						]));
 			};
 			var titleAndDests = A2(
@@ -12811,9 +13059,9 @@ var $author$project$Views$view = function (model) {
 						]),
 					_List_fromArray(
 						[
-							$elm$html$Html$text(page.x)
+							$elm$html$Html$text(page.u)
 						])),
-				A2($elm$core$List$map, toHeader, model.s.M));
+				A2($elm$core$List$map, toHeader, model.o.N));
 			var withPastDests = _Utils_ap(
 				A2(
 					$elm$core$List$map,
@@ -12822,10 +13070,10 @@ var $author$project$Views$view = function (model) {
 						A3(
 							$author$project$Helpers$popBy,
 							function ($) {
-								return $.x;
+								return $.u;
 							},
 							page,
-							model.s.I))),
+							model.o.z))),
 				titleAndDests);
 			var withArrows = A2(
 				$elm$html$Html$div,
@@ -12838,7 +13086,7 @@ var $author$project$Views$view = function (model) {
 					$author$project$Helpers$rightarrow(2),
 					withPastDests));
 			var timeDisplay = function () {
-				var timeInSec = (model.s.O / 100) | 0;
+				var timeInSec = (model.o.H / 100) | 0;
 				return A2(
 					$elm$html$Html$h3,
 					_List_Nil,
@@ -12853,22 +13101,22 @@ var $author$project$Views$view = function (model) {
 					var pathTitles = A2(
 						$elm$core$List$map,
 						function ($) {
-							return $.x;
+							return $.u;
 						},
-						model.s.w);
+						model.o.t);
 					var destTitles = A2(
 						$elm$core$List$map,
 						function ($) {
-							return $.x;
+							return $.u;
 						},
-						model.R);
-					return A3($author$project$Views$viewPath, pathTitles, destTitles, true);
+						model.D);
+					return A2($author$project$Views$viewPath, pathTitles, destTitles);
 				} else {
 					return $author$project$Views$viewPeerLocs(
 						$elm$core$Dict$values(model.i));
 				}
 			}();
-			var goBackBtn = ($elm$core$List$length(model.s.w) > 1) ? A2(
+			var goBackBtn = ($elm$core$List$length(model.o.t) > 1) ? A2(
 				$elm$html$Html$button,
 				_List_fromArray(
 					[
@@ -12896,6 +13144,17 @@ var $author$project$Views$view = function (model) {
 							]),
 						_List_fromArray(
 							[withArrows, timeDisplay, goBackBtn]))
+					]));
+			var giveUpBtn = A2(
+				$elm$html$Html$button,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('btn btn-outline-dark m-3'),
+						$elm$html$Html$Events$onClick($author$project$Model$GiveUp)
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('Give Up')
 					]));
 			var dummyNavbar = A3(
 				$elm$html$Html$node,
@@ -12939,7 +13198,7 @@ var $author$project$Views$view = function (model) {
 									]),
 								_List_fromArray(
 									[
-										$author$project$Views$viewNode(page._)
+										$author$project$Views$viewNode(page.ac)
 									])),
 								A2(
 								$elm$html$Html$div,
@@ -12948,7 +13207,7 @@ var $author$project$Views$view = function (model) {
 										$elm$html$Html$Attributes$class('col-2')
 									]),
 								_List_fromArray(
-									[rightSideView]))
+									[giveUpBtn, rightSideView]))
 							]))
 					]));
 			return A2(
@@ -12967,19 +13226,37 @@ var $author$project$Views$view = function (model) {
 					]));
 		case 4:
 			var playeruuid = _v0.a;
-			var you = _Utils_update(
-				$author$project$Model$emptyPeer,
-				{
-					w: A2(
-						$elm$core$List$map,
+			var you = {
+				bh: A2(
+					$elm$core$Maybe$withDefault,
+					'',
+					A2(
+						$elm$core$Maybe$map,
 						function ($) {
-							return $.x;
+							return $.u;
 						},
-						model.s.w),
-					O: model.s.O,
-					o: model.b.o,
-					k: model.b.k
-				});
+						$elm$core$List$head(model.o.t))),
+				Q: true,
+				f: model.a.f,
+				K: A2(
+					$elm$core$Maybe$withDefault,
+					'',
+					A2(
+						$elm$core$Maybe$map,
+						function ($) {
+							return $.u;
+						},
+						$elm$core$List$head(model.o.z))),
+				t: A2(
+					$elm$core$List$map,
+					function ($) {
+						return $.u;
+					},
+					model.o.t),
+				H: model.o.H,
+				l: model.a.l,
+				g: model.a.g
+			};
 			var timeInSec = function (time) {
 				return (time / 100) | 0;
 			};
@@ -12987,117 +13264,68 @@ var $author$project$Views$view = function (model) {
 				$elm$core$List$cons,
 				you,
 				$elm$core$Dict$values(model.i));
-			var finishedPlayers = A2(
+			var unfinishedPlayers = A2(
 				$elm$core$List$filter,
 				A2(
 					$elm$core$Basics$composeR,
 					function ($) {
-						return $.w;
+						return $.Q;
 					},
-					A2(
-						$elm$core$Basics$composeR,
-						$elm$core$List$length,
-						$elm$core$Basics$lt(0))),
+					$elm$core$Basics$not),
 				playerList);
-			var leaderboard = F3(
-				function (header, f, toString) {
-					var playerView = function (player) {
-						return A2(
-							$elm$html$Html$span,
-							_List_Nil,
-							_List_fromArray(
-								[
-									A2(
-									$elm$html$Html$a,
-									_List_fromArray(
-										[
-											$elm$html$Html$Attributes$class('hoverUnderline'),
-											$elm$html$Html$Events$onClick(
-											$author$project$Model$ReviewPlayer(player.k))
-										]),
-									_List_fromArray(
-										[
-											$elm$html$Html$text(player.o)
-										])),
-									$elm$html$Html$text(
-									' ' + toString(
-										f(player)))
-								]));
-					};
-					var sortedPlayersView = A2(
-						$elm$core$List$map,
-						playerView,
-						A2($elm$core$List$sortBy, f, finishedPlayers));
+			var unfinishedPlayersView = function () {
+				var viewPlayer = function (player) {
 					return A2(
 						$elm$html$Html$div,
 						_List_fromArray(
 							[
-								$elm$html$Html$Attributes$class('container border border-dark border-2 bg-light m-3'),
-								A2($elm$html$Html$Attributes$style, 'text-align', 'center')
+								$elm$html$Html$Attributes$class('col-3')
 							]),
-						A2(
-							$elm$core$List$map,
-							$author$project$Helpers$singleRow,
+						_List_fromArray(
+							[
+								A2(
+								$elm$html$Html$b,
+								_List_Nil,
+								_List_fromArray(
+									[
+										$elm$html$Html$text(player.l)
+									])),
+								A2($elm$html$Html$br, _List_Nil, _List_Nil),
+								$elm$html$Html$text(player.bh)
+							]));
+				};
+				return ($elm$core$List$length(unfinishedPlayers) > 0) ? A2(
+					$elm$html$Html$div,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$class('container.fluid')
+						]),
+					_List_fromArray(
+						[
+							$author$project$Helpers$singleRow(
 							A2(
-								$elm$core$List$cons,
-								A2(
-									$elm$html$Html$h3,
-									_List_Nil,
-									_List_fromArray(
-										[
-											$elm$html$Html$text(header)
-										])),
-								A2(
-									$elm$core$List$cons,
-									A2(
-										$elm$html$Html$hr,
-										_List_fromArray(
-											[
-												$elm$html$Html$Attributes$class('border border-dark border-1')
-											]),
-										_List_Nil),
-									sortedPlayersView))));
-				});
-			var lengthBoard = A3(
-				leaderboard,
-				'Path Length',
-				A2(
-					$elm$core$Basics$composeR,
-					function ($) {
-						return $.w;
-					},
-					$elm$core$List$length),
-				A2(
-					$elm$core$Basics$composeR,
-					$elm$core$Basics$add(-1),
-					A2(
-						$elm$core$Basics$composeR,
-						$elm$core$String$fromInt,
-						function (l) {
-							return l + ' steps';
-						})));
-			var timeBoard = A3(
-				leaderboard,
-				'Time',
-				function ($) {
-					return $.O;
-				},
-				A2(
-					$elm$core$Basics$composeR,
-					timeInSec,
-					A2(
-						$elm$core$Basics$composeR,
-						$elm$core$String$fromInt,
-						function (t) {
-							return t + 's';
-						})));
+								$elm$html$Html$h3,
+								_List_Nil,
+								_List_fromArray(
+									[
+										$elm$html$Html$text('unfinished players')
+									]))),
+							A2(
+							$elm$html$Html$div,
+							_List_fromArray(
+								[
+									$elm$html$Html$Attributes$class('row')
+								]),
+							A2($elm$core$List$map, viewPlayer, unfinishedPlayers))
+						])) : $elm$html$Html$text('');
+			}();
 			var pathView = function () {
 				var _v2 = A2(
 					$elm$core$List$filter,
 					A2(
 						$elm$core$Basics$composeR,
 						function ($) {
-							return $.k;
+							return $.g;
 						},
 						$elm$core$Basics$eq(playeruuid)),
 					playerList);
@@ -13110,9 +13338,9 @@ var $author$project$Views$view = function (model) {
 							A2(
 								$elm$core$List$map,
 								function ($) {
-									return $.x;
+									return $.u;
 								},
-								model.R)) ? A2(
+								model.D)) ? A2(
 							$elm$html$Html$b,
 							_List_Nil,
 							_List_fromArray(
@@ -13137,8 +13365,11 @@ var $author$project$Views$view = function (model) {
 						A2(
 							$elm$core$List$intersperse,
 							$author$project$Helpers$rightarrow(1),
-							A2($elm$core$List$map, viewLink, player.w)));
-					return A2($elm$core$List$member, player, finishedPlayers) ? A2(
+							A2(
+								$elm$core$List$map,
+								viewLink,
+								$elm$core$List$reverse(player.t))));
+					return player.Q ? A2(
 						$elm$html$Html$div,
 						_List_fromArray(
 							[
@@ -13152,20 +13383,137 @@ var $author$project$Views$view = function (model) {
 									_List_Nil,
 									_List_fromArray(
 										[
-											$elm$html$Html$text(player.o + '\'s path')
+											$elm$html$Html$text(player.l + '\'s path')
 										]))),
 								$author$project$Helpers$singleRow(listView)
 							])) : A2(
-						$elm$html$Html$h3,
-						_List_Nil,
+						$elm$html$Html$div,
 						_List_fromArray(
 							[
-								$elm$html$Html$text(player.o + ' has not finished yet')
+								$elm$html$Html$Attributes$class('container')
+							]),
+						_List_fromArray(
+							[
+								$author$project$Helpers$singleRow(
+								A2(
+									$elm$html$Html$h3,
+									_List_Nil,
+									_List_fromArray(
+										[
+											$elm$html$Html$text(player.l + ' hasn\'t finished yet')
+										])))
 							]));
 				} else {
 					return $elm$html$Html$text('Problem displaying player path');
 				}
 			}();
+			var gotToEnd = function (player) {
+				return _Utils_eq(
+					$elm$core$Maybe$Just(player.K),
+					A2(
+						$elm$core$Maybe$map,
+						function ($) {
+							return $.u;
+						},
+						$elm$core$List$head(
+							$elm$core$List$reverse(model.D))));
+			};
+			var playersThatGaveUp = A2(
+				$elm$core$List$filter,
+				function (p) {
+					return (!gotToEnd(p)) && p.Q;
+				},
+				playerList);
+			var playersThatGotToEnd = A2($elm$core$List$filter, gotToEnd, playerList);
+			var leaderboard = F3(
+				function (header, f, toString) {
+					var playerView = function (player) {
+						var stat = gotToEnd(player) ? toString(
+							f(player)) : 'DNE';
+						return A2(
+							$elm$html$Html$span,
+							_List_Nil,
+							_List_fromArray(
+								[
+									A2(
+									$elm$html$Html$a,
+									_List_fromArray(
+										[
+											$elm$html$Html$Attributes$class('hoverUnderline'),
+											$elm$html$Html$Attributes$href('#'),
+											$elm$html$Html$Events$onClick(
+											$author$project$Model$ReviewPlayer(player.g))
+										]),
+									_List_fromArray(
+										[
+											$elm$html$Html$text(player.l)
+										])),
+									$elm$html$Html$text(' ' + stat)
+								]));
+					};
+					var sortedPlayersView = A2(
+						$elm$core$List$map,
+						playerView,
+						_Utils_ap(
+							A2($elm$core$List$sortBy, f, playersThatGotToEnd),
+							playersThatGaveUp));
+					return A2(
+						$elm$html$Html$div,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('container border border-dark border-2 bg-light m-3 p-2'),
+								A2($elm$html$Html$Attributes$style, 'text-align', 'center')
+							]),
+						A2(
+							$elm$core$List$map,
+							$author$project$Helpers$singleRow,
+							A2(
+								$elm$core$List$cons,
+								A2(
+									$elm$html$Html$h3,
+									_List_Nil,
+									_List_fromArray(
+										[
+											$elm$html$Html$text(header)
+										])),
+								A2(
+									$elm$core$List$cons,
+									A2($elm$html$Html$hr, _List_Nil, _List_Nil),
+									sortedPlayersView))));
+				});
+			var lengthBoard = A3(
+				leaderboard,
+				'Path Length',
+				A2(
+					$elm$core$Basics$composeR,
+					function ($) {
+						return $.t;
+					},
+					$elm$core$List$length),
+				A2(
+					$elm$core$Basics$composeR,
+					$elm$core$Basics$add(-1),
+					A2(
+						$elm$core$Basics$composeR,
+						$elm$core$String$fromInt,
+						function (l) {
+							return l + ' steps';
+						})));
+			var timeBoard = A3(
+				leaderboard,
+				'Time',
+				function ($) {
+					return $.H;
+				},
+				A2(
+					$elm$core$Basics$composeR,
+					timeInSec,
+					A2(
+						$elm$core$Basics$composeR,
+						$elm$core$String$fromInt,
+						function (t) {
+							return t + 's';
+						})));
 			return A2(
 				$elm$html$Html$div,
 				_List_fromArray(
@@ -13204,7 +13552,23 @@ var $author$project$Views$view = function (model) {
 						$elm$html$Html$text('Click on a player\'s name to see their path')),
 						A2($elm$html$Html$br, _List_Nil, _List_Nil),
 						A2($elm$html$Html$br, _List_Nil, _List_Nil),
-						$author$project$Helpers$singleRow(pathView)
+						$author$project$Helpers$singleRow(pathView),
+						A2($elm$html$Html$br, _List_Nil, _List_Nil),
+						A2($elm$html$Html$br, _List_Nil, _List_Nil),
+						unfinishedPlayersView,
+						A2($elm$html$Html$br, _List_Nil, _List_Nil),
+						A2($elm$html$Html$br, _List_Nil, _List_Nil),
+						$author$project$Helpers$singleRow(
+						model.a.f ? A2(
+							$elm$html$Html$button,
+							_List_fromArray(
+								[
+									$elm$html$Html$Events$onClick($author$project$Model$ClickedNewGame)
+								]),
+							_List_fromArray(
+								[
+									$elm$html$Html$text('New Game')
+								])) : $elm$html$Html$text('Waiting on host to make a new game...'))
 					]));
 		default:
 			var msg = _v0.a;
@@ -13230,12 +13594,12 @@ var $author$project$Main$main = function () {
 			]));
 	return $elm$browser$Browser$element(
 		{
-			bl: function (flags) {
+			bo: function (flags) {
 				return _Utils_Tuple2($author$project$Main$initialModel, initCmd);
 			},
-			bz: $author$project$Main$subscriptions,
-			bB: $author$project$Main$update,
-			bD: $author$project$Views$view
+			bB: $author$project$Main$subscriptions,
+			bD: $author$project$Main$update,
+			bF: $author$project$Views$view
 		});
 }();
 _Platform_export({'Main':{'init':$author$project$Main$main(
