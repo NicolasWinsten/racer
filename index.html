@@ -23,7 +23,6 @@
 
 </head>
 <body>
-
     <div id="app"></div>
     <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastbox"></div>
 
@@ -88,11 +87,11 @@
         var clientConnections = [];
 
         window.addEventListener("beforeunload", function(e){
-           if (isHost) {
+           if (isHost && clientConnections.length > 0) {
                 clientConnections.forEach(function(conn) {
                     conn.close();
                 });
-           } else {
+           } else if (hostConnection != null) {
                 hostConnection.close()
            }
         }, false);

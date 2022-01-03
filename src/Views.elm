@@ -95,13 +95,16 @@ viewWelcome options =
                 , button [ onClick <| ClickedJoinOrHost { isHost = False } ] [ text "Join Game" ]
                 ]
     in
-    div [ class "container" ]
-        [ singleRow <| h1 [] [ text "Let's Race" ]
-        , descSection
-        , Html.hr [] []
-        , singleRow usernameInput
-        , Html.hr [] []
-        , singleRow <| div [ class "container" ] [ div [ class "row" ] [ div [ class "col" ] [ hostGameSection ], div [ class "col" ] [ joinGameSection ] ] ]
+    div []
+        [ Html.small [ class "d-inline", style "float" "right" ] [ text "go back to ", Html.a [ href "https://nicolaswinsten.com" ] [ text "my page" ] ]
+        , div [ class "container" ]
+            [ singleRow <| h1 [] [ text "Let's Race" ]
+            , descSection
+            , Html.hr [] []
+            , singleRow usernameInput
+            , Html.hr [] []
+            , singleRow <| div [ class "container" ] [ div [ class "row" ] [ div [ class "col" ] [ hostGameSection ], div [ class "col" ] [ joinGameSection ] ] ]
+            ]
         ]
 
 

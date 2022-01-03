@@ -107,24 +107,19 @@ randomTitle =
 -}
 getDestinations : Int -> Random.Seed -> ( List String, Random.Seed )
 getDestinations num seed =
-    Tuple.pair [ "United States", "Long Island", "Queens" ] <| Random.initialSeed 0
+    case num of
+        0 ->
+            ( [], seed )
 
+        n ->
+            let
+                ( title, newSeed ) =
+                    getRandomTitle seed
 
-
-{- case num of
-   0 ->
-       ( [], seed )
-
-   n ->
-       let
-           ( title, newSeed ) =
-               getRandomTitle seed
-
-           ( dests, lastSeed ) =
-               getDestinations (n - 1) newSeed
-       in
-       ( title :: dests, lastSeed )
--}
+                ( dests, lastSeed ) =
+                    getDestinations (n - 1) newSeed
+            in
+            ( title :: dests, lastSeed )
 
 
 getRandomTitle : Random.Seed -> ( String, Random.Seed )
