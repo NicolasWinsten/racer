@@ -116,7 +116,7 @@ startGame model =
                         PeerPort.sendData <| (PeerPort.gameStarted <| model.options.username ++ " started the game")
 
                     else
-                        makeToast <| model.options.username ++ " started the game"
+                        Cmd.none
 
                 startReachSignal =
                     PeerPort.sendData <| PeerPort.titleReach model.options.uuid start.title
