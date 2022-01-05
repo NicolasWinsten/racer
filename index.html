@@ -75,26 +75,21 @@
                 setTimeout(function() {
                     toast.hide();
                     setTimeout(function() {el.remove();}, 1000);
-                }, 5000);
+                }, 10000);
             }
         );
 
 
         /* code handling the Peer connections */
 
-        var peer = null;
-        var isHost = null;
-        var hostConnection = null;
-        var clientConnections = [];
+        let peer = null;
+        let isHost = null;
+        let hostConnection = null;
+        let clientConnections = [];
 
         window.addEventListener("beforeunload", function(e){
-           if (isHost && clientConnections.length > 0) {
-                clientConnections.forEach(function(conn) {
-                    conn.close();
-                });
-           } else if (hostConnection != null) {
-                hostConnection.close()
-           }
+           if (peer != null) { peer.destroy(); }
+
         }, false);
 
         function filterConns() {
@@ -114,6 +109,11 @@
         app.ports.makePeer.subscribe(
             function(str) {
                 console.log("initializing peer: " + str);
+
+                if (peer != null) {
+                    peer.destroy();
+                }
+
                 peer = new Peer(null, {debug : 2});
 
                 peer.on('open', function(id) {
@@ -132,6 +132,7 @@
 
         app.ports.initPeer.subscribe(
             function(init) {
+
                 isHost = init.isHost;
                 console.log("isHost", isHost);
 
@@ -154,6 +155,7 @@
 
                             conn.on('error', function(err) {
                                 console.log("connection error with", conn.metadata.username, ":", err);
+                                app.ports.receiveData.send({error: err});
                             });
                         });
 
@@ -167,31 +169,35 @@
                     hostConnection = peer.connect(init.connectId, {metadata : {username : init.username, uuid : init.uuid}});
                     hostConnection.on('open', function() {
                         hostConnection.on('data', dataHandler);
+                        peer.disconnect();
 
                         hostConnection.on('close', function() {
                             console.log("connection from host lost");
                             app.ports.receiveData.send({hostLost : "Host connection was closed"});
+                            peer.destroy();
                         });
 
                         hostConnection.on('error', function(err) {
                             console.log("connection error with host:", err);
+                            app.ports.receiveData.send({error: err});
                         });
                     });
                 }
 
-                app.ports.sendData.subscribe(
-                    function(data) {
-                        if (isHost) {
-                            console.log("trying to send data to clients:", data);
-                            clientConnections.forEach(function(conn) {
-                                conn.send(data);
-                            });
-                        } else {
-                            console.log("trying to send to host:", data);
-                            hostConnection.send(data);
-                        }
-                    }
-                );
+            }
+        );
+
+        app.ports.sendData.subscribe(
+            function(data) {
+                if (isHost) {
+                    console.log("trying to send data to clients:", data);
+                    clientConnections.forEach(function(conn) {
+                        conn.send(data);
+                    });
+                } else {
+                    console.log("trying to send to host:", data);
+                    hostConnection.send(data);
+                }
             }
         );
 

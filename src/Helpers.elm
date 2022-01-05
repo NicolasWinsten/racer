@@ -243,3 +243,75 @@ firstMaybe left right =
 -}
 singleRow element =
     Html.div [ Html.Attributes.class "row" ] [ Html.div [ Html.Attributes.class "col" ] [ element ] ]
+
+
+dropWhile : (a -> Bool) -> List a -> List a
+dropWhile f data =
+    case data of
+        (x :: xs) as all ->
+            if f x then
+                dropWhile f xs
+
+            else
+                all
+
+        [] ->
+            []
+
+
+{-| takeWhile function that also returns the dropped tail
+-}
+pull : (a -> Bool) -> List a -> ( List a, List a )
+pull f data =
+    case data of
+        (x :: xs) as all ->
+            if f x then
+                let
+                    ( left, right ) =
+                        pull f xs
+                in
+                ( x :: left, right )
+
+            else
+                ( [], all )
+
+        [] ->
+            ( [], [] )
+
+
+{-| find every segment of length more than 1 in a list such that it begins and ends with an element satisfying the function
+-}
+segments : (a -> Bool) -> List a -> List (List a)
+segments f data =
+    case dropWhile (f >> not) data of
+        x :: xs ->
+            case pull (f >> not) xs of
+                ( ys, z :: zs ) ->
+                    (x :: ys ++ [ z ]) :: segments f (z :: zs)
+
+                _ ->
+                    []
+
+        [] ->
+            []
+
+
+type alias Segment =
+    { username : String, from : String, to : String, seq : List String }
+
+
+
+{- maxBy : (a -> comparable) -> List a -> Maybe a
+   maxBy f data =
+       List.foldl (\x -> Maybe.map >> f >> max x) Nothing data
+-}
+{- bestSeg : String -> String -> List Segment -> Maybe Segment
+   bestSeg from to segs = case segs of
+       (thisSeg :: otherSegs) ->
+           let
+               nextBest = bestSeg from to otherSegs
+           in
+           if thisSeg.from == from && thisSeg.to == to then
+               case nextBest of
+                   Just best -> List.maximum
+-}

@@ -13,6 +13,11 @@ import Time
 import Views exposing (view)
 
 
+initCmd : Cmd Msg
+initCmd =
+    Cmd.batch [ Random.generate GotUUID <| Random.int 0 Random.maxInt, PeerPort.makePeer "" ]
+
+
 initialModel : Model
 initialModel =
     let
@@ -299,6 +304,9 @@ update msg model =
             else if not flag.isHost && String.isEmpty model.options.joinId then
                 ( model, makeToast "You have to provide the host's game ID to join their game" )
 
+            else if String.isEmpty model.options.peerId then
+                ( model, makeToast "Your socket connection hasn't been initialized. Refresh the page if this issue persists." )
+
             else
                 let
                     ( previewModel, cmd ) =
@@ -473,11 +481,7 @@ update msg model =
                 ( { model | window = Bad "Host connection was lost... but you're the host" }, Cmd.none )
 
             else
-                let
-                    options =
-                        model.options
-                in
-                ( { initialModel | options = options }, makeToast message )
+                ( initialModel, Cmd.batch <| [ makeToast message, initCmd ] )
 
         PeerMsg (PeerPort.GameFinish peeruuid path time) ->
             case Dict.get peeruuid model.peers of
@@ -588,10 +592,6 @@ subscriptions model =
 
 main : Program () Model Msg
 main =
-    let
-        initCmd =
-            Cmd.batch [ Random.generate GotUUID <| Random.int 0 Random.maxInt, PeerPort.makePeer "" ]
-    in
     Browser.element
         { init = \_ -> ( initialModel, initCmd )
         , view = view

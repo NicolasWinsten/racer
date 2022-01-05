@@ -313,16 +313,20 @@ view model =
                     model.seedChange == model.options.seedStr
 
                 ( startBtn, refreshBtn ) =
+                    let
+                        refreshBtn_ =
+                            div [ class "p-2" ]
+                                [ input [ placeholder "new game seed", value model.seedChange, onInput ChangeSeedWhileInPreview ] []
+                                , button [ disabled refreshDisabled, onClick Refresh ] [ text "Refresh" ]
+                                ]
+                    in
                     if allDestsLoaded && model.options.isHost then
                         ( button [ onClick <| StartGame, class "m-2" ] [ text "Start game" ]
-                        , div [ class "p-2" ]
-                            [ input [ placeholder "new game seed", value model.seedChange, onInput ChangeSeedWhileInPreview ] []
-                            , button [ disabled refreshDisabled, onClick Refresh ] [ text "Refresh" ]
-                            ]
+                        , refreshBtn_
                         )
 
                     else if model.options.isHost then
-                        ( text "Waiting for destinations to finish loading...", text "" )
+                        ( text "Waiting for destinations to finish loading...", refreshBtn_ )
 
                     else
                         ( text "Waiting for host to start game...", text "" )
@@ -462,8 +466,15 @@ view model =
 
                                     else
                                         "DNE"
+
+                                name =
+                                    if model.options.username == player.username then
+                                        Html.b [] [ text player.username ]
+
+                                    else
+                                        text player.username
                             in
-                            [ Html.a [ class "hoverUnderline", href "#", onClick <| ReviewPlayer player.uuid ] [ text player.username ], text <| " " ++ stat ]
+                            [ Html.a [ class "hoverUnderline", href "#", onClick <| ReviewPlayer player.uuid ] [ name ], text <| " " ++ stat ]
                                 |> span []
 
                         sortedPlayersView =
