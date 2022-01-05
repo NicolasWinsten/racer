@@ -279,6 +279,19 @@ pull f data =
             ( [], [] )
 
 
+last : List a -> Maybe a
+last data =
+    case data of
+        x :: [] ->
+            Just x
+
+        _ :: rest ->
+            last rest
+
+        [] ->
+            Nothing
+
+
 {-| find every segment of length more than 1 in a list such that it begins and ends with an element satisfying the function
 -}
 segments : (a -> Bool) -> List a -> List (List a)
@@ -296,22 +309,61 @@ segments f data =
             []
 
 
+maxBy : (a -> comparable) -> List a -> Maybe a
+maxBy f data =
+    let
+        g item mitem =
+            case mitem of
+                Just x ->
+                    if f item > f x then
+                        Just item
+
+                    else
+                        Just x
+
+                Nothing ->
+                    Just item
+    in
+    List.foldl g Nothing data
+
+
+maxesBy : (a -> comparable) -> List a -> List a
+maxesBy f data =
+    case maxBy f data of
+        Just x ->
+            let
+                fx =
+                    f x
+            in
+            List.filter (f >> (==) fx) data
+
+        Nothing ->
+            []
+
+
+sliding2 : List a -> List ( a, a )
+sliding2 data =
+    case data of
+        x :: y :: rest ->
+            ( x, y ) :: sliding2 (y :: rest)
+
+        _ ->
+            []
+
+
+{-| helper code that finds the best segments from the players' paths
+-}
 type alias Segment =
-    { username : String, from : String, to : String, seq : List String }
+    { username : String, seq : List String }
 
 
-
-{- maxBy : (a -> comparable) -> List a -> Maybe a
-   maxBy f data =
-       List.foldl (\x -> Maybe.map >> f >> max x) Nothing data
--}
-{- bestSeg : String -> String -> List Segment -> Maybe Segment
-   bestSeg from to segs = case segs of
-       (thisSeg :: otherSegs) ->
-           let
-               nextBest = bestSeg from to otherSegs
-           in
-           if thisSeg.from == from && thisSeg.to == to then
-               case nextBest of
-                   Just best -> List.maximum
--}
+bestSegs : List String -> List Segment -> List Segment
+bestSegs dests segs =
+    let
+        best : ( String, String ) -> List Segment
+        best ( from, to ) =
+            segs
+                |> List.filter (\s -> List.head s.seq == Just from && last s.seq == Just to)
+                |> maxesBy (.seq >> List.length >> negate)
+    in
+    sliding2 dests |> List.concatMap best

@@ -29,14 +29,15 @@ backToMyPageLink =
     Html.small [ class "d-inline m-2", style "float" "right" ] [ text "go back to ", Html.a [ class "wikilink", href "https://nicolaswinsten.github.io" ] [ text "my page" ] ]
 
 
+break num =
+    span [] <| List.repeat num (br [] [])
+
+
 {-| welcome page
 -}
 viewWelcome : Options -> Html Msg
 viewWelcome options =
     let
-        break num =
-            span [] <| List.repeat num (br [] [])
-
         formFloating =
             div [ class "form-floating" ]
 
@@ -128,6 +129,54 @@ viewWelcome options =
             , notesSection
             ]
         ]
+
+
+viewLink : List String -> String -> Html msg
+viewLink dests title =
+    let
+        element =
+            Html.a [ class "hoverUnderline", href <| "https://en.wikipedia.org/wiki/" ++ title, target "_blank" ] [ text title ]
+    in
+    if List.member title dests then
+        Html.b [] [ element ]
+
+    else
+        element
+
+
+{-| display the best path segments from the players for each consecutive pair of destinations
+-}
+viewBestSegments : List Peer -> List String -> Html msg
+viewBestSegments players dests =
+    let
+        getSegments : Peer -> List Segment
+        getSegments player =
+            segments (\x -> List.member x dests) player.path
+                |> List.map (\path -> { username = player.username, seq = List.reverse path })
+
+        bests =
+            bestSegs dests <| List.concatMap getSegments players
+
+        viewSeg : Segment -> Html msg
+        viewSeg seg =
+            div [ class "row mb-3" ]
+                [ singleRow <|
+                    div []
+                        [ Html.b [] [ text <| seg.username ++ " : " ]
+                        , span [] (seg.seq |> List.map (viewLink dests) |> List.intersperse (rightarrow 1))
+                        ]
+                ]
+
+        segViews =
+            List.map viewSeg bests
+    in
+    if List.isEmpty bests then
+        text ""
+
+    else
+        div [ class "container-fluid" ] <|
+            (singleRow <| h3 [] [ text "best wikiladders" ])
+                :: segViews
 
 
 {-| convert parser Node to custom Html, stripping out the unnecessary bits
@@ -416,6 +465,9 @@ view model =
                 timeInSec time =
                     time // 100
 
+                destTitles =
+                    List.map .title model.dests
+
                 you : Peer
                 you =
                     { username = model.options.username
@@ -429,18 +481,7 @@ view model =
                     }
 
                 gotToEnd player =
-                    Just player.lastDest == (model.dests |> List.reverse |> List.head |> Maybe.map .title)
-
-                viewLink title =
-                    let
-                        element =
-                            Html.a [ class "hoverUnderline", href <| "https://en.wikipedia.org/wiki/" ++ title, target "_blank" ] [ text title ]
-                    in
-                    if List.member title <| List.map .title model.dests then
-                        Html.b [] [ element ]
-
-                    else
-                        element
+                    Just player.lastDest == last destTitles
 
                 playerList : List Peer
                 playerList =
@@ -490,13 +531,18 @@ view model =
                 lengthBoard =
                     leaderboard "Path Length" (.path >> List.length) ((+) -1 >> String.fromInt >> (\l -> l ++ " steps"))
 
+                boardsView =
+                    div [ class "container" ]
+                        [ div [ class "row" ] [ div [ class "col" ] [ timeBoard ], div [ class "col" ] [ lengthBoard ] ]
+                        ]
+
                 pathView =
                     -- show the path of the highlighted player
                     case List.filter (.uuid >> (==) playeruuid) playerList of
                         player :: _ ->
                             let
                                 listView =
-                                    player.path |> List.reverse |> List.map viewLink |> List.intersperse (rightarrow 1) |> div []
+                                    player.path |> List.reverse |> List.map (viewLink destTitles) |> List.intersperse (rightarrow 1) |> div []
                             in
                             if player.finished then
                                 div [ class "container" ] [ singleRow <| h3 [] [ text <| player.username ++ "'s path" ], singleRow listView ]
@@ -510,7 +556,7 @@ view model =
                 unfinishedPlayersView =
                     let
                         viewPlayer player =
-                            div [ class "col-3" ] [ Html.b [] [ text player.username ], Html.br [] [], viewLink player.currentTitle ]
+                            div [ class "col-3" ] [ Html.b [] [ text player.username ], Html.br [] [], viewLink destTitles player.currentTitle ]
                     in
                     if List.length unfinishedPlayers > 0 then
                         div [ class "container.fluid" ] [ singleRow <| h3 [] [ text "unfinished players" ], div [ class "row" ] <| List.map viewPlayer unfinishedPlayers ]
@@ -518,21 +564,17 @@ view model =
                     else
                         text ""
             in
-            div [ class "container" ]
-                [ div [ class "row" ]
-                    [ div [ class "col" ] [ timeBoard ]
-                    , div [ class "col" ] [ lengthBoard ]
-                    ]
+            div [ class "container-fluid" ]
+                [ boardsView
                 , Html.hr [] []
                 , singleRow <| text "Click on a player's name to see their path"
-                , Html.br [] []
-                , Html.br [] []
+                , break 2
                 , singleRow pathView
-                , Html.br [] []
-                , Html.br [] []
+                , break 2
                 , unfinishedPlayersView
-                , Html.br [] []
-                , Html.br [] []
+                , break 2
+                , viewBestSegments playerList destTitles
+                , break 2
                 , singleRow <|
                     if model.options.isHost then
                         button [ onClick <| ClickedNewGame ] [ text "New Game" ]

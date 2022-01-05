@@ -64,7 +64,7 @@
                 console.log("activating toast:", msg);
 
                 let temp = document.createElement('div');
-                temp.innerHTML = "<div class='toast' role='alert' aria-live='assertive' aria-atomic='true'><div class='toast-body'>" + msg + "</div></div>";
+                temp.innerHTML = "<div class='toast border border-dark border-3' role='alert' aria-live='assertive' aria-atomic='true'><div class='toast-body'>" + msg + "</div></div>";
 
                 let el = temp.firstChild;
                 document.getElementById("toastbox").appendChild(el);

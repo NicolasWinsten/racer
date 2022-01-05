@@ -592,6 +592,17 @@ subscriptions model =
 
 main : Program () Model Msg
 main =
+    {- let
+           peer1 : Peer
+           peer1 = {uuid = 1, username = "otherguy", time = "102012", path = ["f", "e", "s", "a"], lastDest}
+           fakeModel : Model
+           fakeModel = { window = Review 0
+                       , gameState = {path = ["a", "b", "c", "d", "e", "f"], remainingDests = [], pastDests = ["f", "d", "a"], time = 10000}
+                       , loadingDests = []
+                       , options = {uuid = 0, username = "nick", seedStr = "seedy", numDestinations = 3, peerId = "peery", joinId = "joiny"}
+                       , }
+       in
+    -}
     Browser.element
         { init = \_ -> ( initialModel, initCmd )
         , view = view
