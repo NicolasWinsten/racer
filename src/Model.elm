@@ -111,7 +111,7 @@ type Msg
     | StartGame
     | GiveUp
     | ChangeOptions Options
-    | ChangeSeedWhileInPreview String
+    | ChangeOptsWhileInPreview { seed : String, numDests : Int }
     | GoBack
     | Tick Time.Posix
     | PeerMsg PeerPort.PeersMsg
@@ -135,4 +135,13 @@ type alias GameState =
 
 
 type alias Model =
-    { window : Window, gameState : GameState, dests : WikiLadder, loadingDests : List LoadingDestination, options : Options, peers : Dict Int Peer, seedChange : String, gameStarted : Bool }
+    { window : Window
+    , gameState : GameState
+    , dests : WikiLadder
+    , loadingDests : List LoadingDestination
+    , options : Options
+    , peers : Dict Int Peer
+    , seedChange : String
+    , numDestsChange : Int
+    , gameStarted : Bool
+    }

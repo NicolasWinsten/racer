@@ -27,7 +27,7 @@ initialModel =
         options =
             { uuid = 0, numDestinations = 4, username = "", seedStr = "", isHost = False, joinId = "", peerId = "" }
     in
-    { window = PreGame, gameState = gameState, dests = [], loadingDests = [], options = options, peers = Dict.empty, seedChange = "", gameStarted = False }
+    { window = PreGame, gameState = gameState, dests = [], loadingDests = [], options = options, peers = Dict.empty, seedChange = "", numDestsChange = 4, gameStarted = False }
 
 
 {-| call getPage when user clicks on a wikilink
@@ -84,8 +84,14 @@ activateClippy =
 createGame : Model -> ( Model, Cmd Msg )
 createGame model =
     let
+        numDestsChosen =
+            model.options.numDestinations
+
+        seedStrChosen =
+            model.options.seedStr
+
         ( titles, _ ) =
-            getDestinations model.options.numDestinations <| strToSeed model.options.seedStr
+            getDestinations numDestsChosen <| strToSeed seedStrChosen
 
         -- create empty page placeholders while we load their descriptions/pictures
         loadingDests =
@@ -93,15 +99,15 @@ createGame model =
 
         signalPeers =
             if model.options.isHost then
-                PeerPort.sendData <| PeerPort.seedInfo model.options.numDestinations model.options.seedStr
+                PeerPort.sendData <| PeerPort.seedInfo numDestsChosen seedStrChosen
 
             else
                 Cmd.none
 
         toast =
-            makeToast <| "game seed is: " ++ model.options.seedStr
+            makeToast <| "game seed is: " ++ seedStrChosen
     in
-    ( { model | window = Preview, dests = [], loadingDests = loadingDests }
+    ( { model | window = Preview, dests = [], loadingDests = loadingDests, seedChange = seedStrChosen, numDestsChange = numDestsChosen }
     , Cmd.batch <| activateTooltips :: activateClippy :: goBackToTop :: signalPeers :: toast :: List.map getDescription titles
     )
 
@@ -175,8 +181,8 @@ update msg model =
         ChangeOptions options ->
             ( { model | options = options }, Cmd.none )
 
-        ChangeSeedWhileInPreview seed ->
-            ( { model | seedChange = seed }, Cmd.none )
+        ChangeOptsWhileInPreview opts ->
+            ( { model | seedChange = opts.seed, numDestsChange = opts.numDests }, Cmd.none )
 
         StartGame ->
             startGame model

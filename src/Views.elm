@@ -2,7 +2,7 @@ module Views exposing (view)
 
 import Dict
 import Helpers exposing (..)
-import Html exposing (Html, br, button, div, h1, h2, h3, h5, input, li, node, span, text, ul)
+import Html exposing (Html, br, button, div, h1, h2, h3, h5, input, label, li, node, span, text, ul)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Html.Parser as Parser exposing (Node(..))
@@ -48,7 +48,7 @@ viewWelcome options =
                     , div [ class "col-6" ]
                         [ formFloating
                             [ input [ id "username", class "form-control", placeholder "username", value options.username, onInput <| changeUsername options ] []
-                            , Html.label [ Html.Attributes.for "username" ] [ text "Your username" ]
+                            , label [ Html.Attributes.for "username" ] [ text "Your username" ]
                             ]
                         ]
                     ]
@@ -84,12 +84,12 @@ viewWelcome options =
                 [ h3 [] [ text "Host" ]
                 , formFloating
                     [ input [ class "form-control", id "seed", placeholder "Game Seed", value options.seedStr, onInput <| changeSeed options ] []
-                    , Html.label [ Html.Attributes.for "seed" ] [ text "Game Seed" ]
+                    , label [ Html.Attributes.for "seed" ] [ text "Game Seed" ]
                     ]
                 , br [] []
                 , formFloating
                     [ input [ class "form-select", id "numDests", type_ "number", value <| String.fromInt options.numDestinations, Html.Attributes.min "2", onInput <| changeNumDestinations options ] []
-                    , Html.label [ Html.Attributes.for "numDests" ] [ text "Number of destinations" ]
+                    , label [ Html.Attributes.for "numDests" ] [ text "Number of destinations" ]
                     ]
                 , br [] []
                 , button [ onClick <| ClickedJoinOrHost { isHost = True } ] [ text "Host Game" ]
@@ -100,7 +100,7 @@ viewWelcome options =
                 [ h3 [] [ text "Join" ]
                 , div [ class "form-floating" ]
                     [ input [ id "joinid", class "form-control", placeholder "Join ID", value options.joinId, onInput <| changeJoinId options ] []
-                    , Html.label [ Html.Attributes.for "joinid" ] [ text "Join ID" ]
+                    , label [ Html.Attributes.for "joinid" ] [ text "Join ID" ]
                     ]
                 , br [] []
                 , button [ onClick <| ClickedJoinOrHost { isHost = False } ] [ text "Join Game" ]
@@ -359,14 +359,24 @@ view model =
                     doneLoading model.loadingDests
 
                 refreshDisabled =
-                    model.seedChange == model.options.seedStr
+                    model.seedChange == model.options.seedStr && model.numDestsChange == model.options.numDestinations
 
-                ( startBtn, refreshBtn ) =
+                ( startBtn, refreshOptions ) =
                     let
                         refreshBtn_ =
-                            div [ class "p-2" ]
-                                [ input [ placeholder "new game seed", value model.seedChange, onInput ChangeSeedWhileInPreview ] []
-                                , button [ disabled refreshDisabled, onClick Refresh ] [ text "Refresh" ]
+                            let
+                                changeSeed str =
+                                    ChangeOptsWhileInPreview { seed = str, numDests = model.numDestsChange }
+
+                                changeNum str =
+                                    String.toInt str |> Maybe.withDefault model.numDestsChange |> (\num -> ChangeOptsWhileInPreview { seed = model.seedChange, numDests = num })
+                            in
+                            div [ class "container-fluid" ]
+                                [ div [ class "input-group" ]
+                                    [ input [ id "num-dests", class "form-control", placeholder "num destinations", type_ "number", value <| String.fromInt model.numDestsChange, Html.Attributes.min "2", onInput changeNum ] []
+                                    , input [ id "seed", class "form-control", placeholder "new game seed", value model.seedChange, onInput changeSeed ] []
+                                    , button [ disabled refreshDisabled, onClick Refresh ] [ text "Refresh" ]
+                                    ]
                                 ]
                     in
                     if allDestsLoaded && model.options.isHost then
@@ -383,7 +393,7 @@ view model =
             div [ class "container", style "text-align" "center" ]
                 [ div [ class "row" ]
                     [ div [ class "col-4" ] [ viewPagePreviews model.loadingDests ]
-                    , div [ class "col-5 mt-5" ] [ copyIdBox, refreshBtn, startBtn ]
+                    , div [ class "col-5 mt-5" ] [ copyIdBox, refreshOptions, startBtn ]
                     , div [ class "col-3 mt-5" ] [ peersView ]
                     ]
                 ]

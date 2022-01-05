@@ -2201,7 +2201,7 @@ titles =
         , "Citizen_Kane"
         , "Odisha"
         , "Neil_Young"
-        , "Fukushima_Daiichi_nuclear_disaster"
+        , "Fukushima_nuclear_disaster"
         , "Cara_Delevingne"
         , "Louis_Farrakhan"
         , "Rick_James"
