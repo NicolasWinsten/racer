@@ -3620,3 +3620,18 @@ titles =
         , "Rupert_Murdoch"
         , "Toy_Story_4"
         ]
+
+
+goofyTitles : Array String
+goofyTitles =
+    Array.fromList
+        [ "Ice_shanty"
+        , "Herkus_Monte"
+        , "Toadstone"
+        , "Glappo"
+        , "Breast-shaped_hill"
+        , "Intentionally_blank_page"
+        , "Clown_Care"
+        , "List_of_clowns"
+        , "Leather_subculture"
+        ]

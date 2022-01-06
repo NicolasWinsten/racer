@@ -188,7 +188,7 @@ viewNode n =
         Element "a" (( "href", link ) :: attrs) children ->
             let
                 unwantedNamespaces =
-                    [ "File", "Special", "Wikipedia", "Category", "Talk", "Help", "Template", "Template talk", "Portal" ]
+                    [ "File", "Special", "Wikipedia", "Category", "Talk", "Help", "Template", "Template_talk", "Portal" ]
 
                 isUnwantedNamespace =
                     List.any (\ns -> String.startsWith ("/wiki/" ++ ns ++ ":") link) unwantedNamespaces
