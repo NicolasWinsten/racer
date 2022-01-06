@@ -105,4 +105,4 @@ grabImg wikipage =
         imgs =
             grabByClass "infobox" >> List.concatMap (grabElements "img") <| wikipage
     in
-    List.head imgs
+    imgs |> List.filter (getAttr "width" >> Maybe.andThen String.toInt >> Maybe.map ((<) 100) >> Maybe.withDefault False) |> List.head

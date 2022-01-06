@@ -165,9 +165,6 @@ attr2htmlattr ( prop, val ) =
 grabElements : String -> Parser.Node -> List Parser.Node
 grabElements tag node =
     case node of
-        Parser.Text _ ->
-            []
-
         (Parser.Element nTag _ children) as element ->
             let
                 rest =
@@ -179,7 +176,7 @@ grabElements tag node =
             else
                 rest
 
-        Parser.Comment _ ->
+        _ ->
             []
 
 
@@ -188,15 +185,12 @@ grabElements tag node =
 grabByClass : String -> Parser.Node -> List Parser.Node
 grabByClass clazz node =
     case node of
-        Parser.Text _ ->
-            []
-
-        (Parser.Element _ attrs children) as element ->
+        (Parser.Element _ _ children) as element ->
             let
                 rest =
                     children |> List.concatMap (grabByClass clazz)
             in
-            case getClass attrs of
+            case getAttr "class" element of
                 Just classStr ->
                     if String.contains clazz classStr then
                         element :: rest
@@ -207,23 +201,33 @@ grabByClass clazz node =
                 Nothing ->
                     rest
 
-        Parser.Comment _ ->
+        _ ->
             []
 
 
-{-| extract the class value from the given list of parser attributes
+{-| extract the value of the given attribute from this node
 -}
-getClass : List Parser.Attribute -> Maybe String
-getClass attrs =
-    case attrs of
-        ( attrName, value ) :: rest ->
-            if attrName == "class" then
-                Just value
+getAttr : String -> Parser.Node -> Maybe String
+getAttr attr node =
+    let
+        get : String -> List Parser.Attribute -> Maybe String
+        get name attributes =
+            case attributes of
+                ( attrName, value ) :: rest ->
+                    if attrName == name then
+                        Just value
 
-            else
-                getClass rest
+                    else
+                        get name rest
 
-        [] ->
+                [] ->
+                    Nothing
+    in
+    case node of
+        Parser.Element _ attributes _ ->
+            get attr attributes
+
+        _ ->
             Nothing
 
 

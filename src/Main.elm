@@ -290,18 +290,19 @@ update msg model =
             ( model, Cmd.none )
 
         Refresh ->
-            if model.seedChange == model.options.seedStr then
-                ( model, Cmd.none )
+            {- if model.seedChange == model.options.seedStr then
+                   ( model, Cmd.none )
 
-            else
-                let
-                    options =
-                        model.options
+               else
+            -}
+            let
+                options =
+                    model.options
 
-                    newModel =
-                        { model | options = { options | seedStr = model.seedChange } }
-                in
-                createGame newModel
+                newModel =
+                    { model | options = { options | seedStr = model.seedChange, numDestinations = model.numDestsChange } }
+            in
+            createGame newModel
 
         ClickedJoinOrHost flag ->
             if String.isEmpty model.options.username then
@@ -534,7 +535,7 @@ update msg model =
                         model.options
 
                     ( newModel, cmd ) =
-                        createGame { model | options = { options | seedStr = info.seed, numDestinations = info.numDestinations }, peers = newPeerDict }
+                        createGame { model | options = { options | seedStr = info.seed, numDestinations = info.numDestinations }, peers = newPeerDict, gameStarted = info.started }
                 in
                 ( newModel, Cmd.batch [ cmd, makeToast <| "You joined " ++ hostName ++ "'s game" ] )
 

@@ -186,8 +186,15 @@ viewNode n =
     case n of
         -- we want to reroute the wikilinks to onClick events
         Element "a" (( "href", link ) :: attrs) children ->
-            if String.startsWith "/wiki/File:" link || String.startsWith "/wiki/Special:" link then
-                -- do not allow File links to be clicked
+            let
+                unwantedNamespaces =
+                    [ "File", "Special", "Wikipedia", "Category", "Talk", "Help", "Template", "Template talk", "Portal" ]
+
+                isUnwantedNamespace =
+                    List.any (\ns -> String.startsWith ("/wiki/" ++ ns ++ ":") link) unwantedNamespaces
+            in
+            if isUnwantedNamespace then
+                -- do not allow File, Category, Wikipedia links to be clicked
                 Html.a (List.map attr2htmlattr attrs) (List.map viewNode children)
 
             else if String.startsWith "/wiki/" link then
@@ -353,7 +360,11 @@ view model =
                         peerList =
                             List.map peerEl <| Dict.values model.peers
                     in
-                    div [ class "container border border-2 border-dark p-2" ] ((singleRow <| h5 [] [ text "Other players" ]) :: Html.hr [] [] :: peerList)
+                    if not <| List.isEmpty peerList then
+                        div [ class "container border border-2 border-dark p-2" ] ((singleRow <| h5 [] [ text "Other players" ]) :: Html.hr [] [] :: peerList)
+
+                    else
+                        text ""
 
                 allDestsLoaded =
                     doneLoading model.loadingDests
@@ -392,9 +403,8 @@ view model =
             in
             div [ class "container", style "text-align" "center" ]
                 [ div [ class "row" ]
-                    [ div [ class "col-4" ] [ viewPagePreviews model.loadingDests ]
-                    , div [ class "col-5 mt-5" ] [ copyIdBox, refreshOptions, startBtn ]
-                    , div [ class "col-3 mt-5" ] [ peersView ]
+                    [ div [ class "col" ] [ viewPagePreviews model.loadingDests ]
+                    , div [ class "col mt-5" ] [ copyIdBox, refreshOptions, startBtn, peersView ]
                     ]
                 ]
 
