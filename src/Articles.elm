@@ -1863,7 +1863,7 @@ titles =
         , "Gorillaz"
         , "Al_Gore"
         , "F._Scott_Fitzgerald"
-        , "Human_Sexuality"
+        , "Human_sexuality"
         , "Pink_(singer)"
         , "A_Song_of_Ice_and_Fire"
         , "Ivar_the_Boneless"

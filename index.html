@@ -72,10 +72,10 @@
                 let toast = new bootstrap.Toast(el);
                 toast.show();
 
-                setTimeout(function() {
+                setTimeout(() => {
                     toast.hide();
-                    setTimeout(function() {el.remove();}, 1000);
-                }, 10000);
+                    setTimeout(() => {el.remove();}, 2000);
+                }, 15000);
             }
         );
 
@@ -86,6 +86,8 @@
         let isHost = null;
         let hostConnection = null;
         let clientConnections = [];
+        let chromeAgent = userAgentString.indexOf("Chrome") > -1;
+        let safariAgent = !chromeAgent && userAgentString.indexOf("Safari") > -1;
 
         window.addEventListener("beforeunload", function(e){
            if (peer != null) { peer.destroy(); }
@@ -113,8 +115,10 @@
                 if (peer != null) {
                     peer.destroy();
                 }
+                peerOptions = {debug : 2}
+                if (safariAgent) { peerOptions.serialization = "json"; }
 
-                peer = new Peer(null, {debug : 2});
+                peer = new Peer(null, peerOptions);
 
                 peer.on('open', function(id) {
                     console.log("peer ID is " + id);
