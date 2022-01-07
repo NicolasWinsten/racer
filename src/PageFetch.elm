@@ -103,6 +103,10 @@ grabImg : Parser.Node -> Maybe Parser.Node
 grabImg wikipage =
     let
         imgs =
+            -- first try the infobox
             grabByClass "infobox" >> List.concatMap (grabElements "img") <| wikipage
+
+        withBackups =
+            imgs ++ grabElements "img" wikipage
     in
-    imgs |> List.filter (getAttr "width" >> Maybe.andThen String.toInt >> Maybe.map ((<=) 50) >> Maybe.withDefault False) |> List.head
+    withBackups |> List.filter (getAttr "width" >> Maybe.andThen String.toInt >> Maybe.map ((<) 50) >> Maybe.withDefault False) |> List.head
