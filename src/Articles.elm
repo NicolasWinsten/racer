@@ -4281,7 +4281,7 @@ titles =
         , "Russian_alphabet"
         , "Sidney_Poitier"
         , "Ukraine"
-        , "Superbad_(film)"
+        , "Superbad"
         , "Guardian_angel"
         , "Battle_of_Tours"
         , "Buddhahood"
