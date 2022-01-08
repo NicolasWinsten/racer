@@ -9,6 +9,7 @@ import Maybe
 import Parser exposing ((|.), (|=), Parser, chompUntil, getChompedString, succeed, symbol)
 import Result
 import Set
+import Url exposing (percentDecode)
 
 
 
@@ -168,10 +169,13 @@ linksOn html =
 createBackUpLinkList : String -> Node
 createBackUpLinkList html =
     let
+        toText link =
+            link |> percentDecode |> Maybe.withDefault "?" |> String.replace "_" " "
+
         anchorTexts =
             linksOn html
                 |> Set.fromList
                 |> Set.toList
-                |> List.map (\wl -> Element "a" [ ( "href", "/wiki/" ++ wl ) ] [ Text <| String.replace "_" " " wl ])
+                |> List.map (\wl -> Element "a" [ ( "href", "/wiki/" ++ wl ) ] [ Text <| toText wl ])
     in
     List.intersperse (Element "br" [] []) anchorTexts |> Element "div" []

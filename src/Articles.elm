@@ -7757,7 +7757,7 @@ titles =
         , "Sic_semper_tyrannis"
         , "Year_of_the_Four_Emperors"
         , "Tuberculosis"
-        , "PlayerUnknown's_Battlegrounds"
+        , "PUBG:_Battlegrounds"
         , "James,_brother_of_Jesus"
         , "O_Brother,_Where_Art_Thou?"
         , "Hernán_Cortés"
