@@ -1,12 +1,14 @@
 module PageFetch exposing (PageContent, getPage)
 
 import Helpers exposing (..)
-import Html.Parser as Parser exposing (Attribute, Node(..))
+import Html.Parser exposing (Attribute, Node(..))
 import Http
 import Json.Decode exposing (Decoder, field, map2, string)
-import List exposing (head)
+import List
 import Maybe
+import Parser exposing ((|.), (|=), Parser, chompUntil, getChompedString, succeed, symbol)
 import Result
+import Set
 
 
 
@@ -24,7 +26,7 @@ type alias PageHtml =
 
 
 type alias PageContent =
-    { title : String, content : Parser.Node, desc : String, image : Maybe Parser.Node }
+    { title : String, content : Html.Parser.Node, desc : String, image : Maybe Html.Parser.Node }
 
 
 pageDecoder : Decoder PageHtml
@@ -55,19 +57,28 @@ content : FetchResult -> Result Http.Error PageContent
 content (FetchResult res) =
     case res of
         Ok page ->
+            let
+                desc =
+                    extractShortDesc page.html
+            in
             Ok <|
-                case Parser.run page.html of
-                    Ok nodes ->
+                case Html.Parser.run page.html of
+                    Ok (node :: _) ->
                         { title = page.title
-                        , content = Maybe.withDefault (Text "Content couldn't be parsed. GO BACK") (head nodes)
-                        , desc = Maybe.andThen extractShortDesc >> Maybe.withDefault "No description found" <| head nodes
-                        , image = Maybe.andThen grabImg <| head nodes
+                        , content = node
+                        , desc = desc
+                        , image = grabImg node
                         }
 
-                    Err _ ->
+                    _ ->
                         { title = page.title
-                        , content = Text "This page isn't well formed. GO BACK"
-                        , desc = "No description found"
+                        , content =
+                            Element "div"
+                                []
+                                [ Text "This page is malformed and can't be displayed, but here are the links from it (use Ctrl+f)"
+                                , createBackUpLinkList page.html
+                                ]
+                        , desc = desc
                         , image = Nothing
                         }
 
@@ -75,31 +86,9 @@ content (FetchResult res) =
             Err error
 
 
-{-| try and pull out the short description from page content
--}
-extractShortDesc : Parser.Node -> Maybe String
-extractShortDesc node =
-    case node of
-        Text _ ->
-            Nothing
-
-        Element "div" (( "class", clazz ) :: _) [ Text desc ] ->
-            if String.contains "shortdescription" clazz then
-                Just desc
-
-            else
-                Nothing
-
-        Element _ _ children ->
-            List.foldr firstMaybe Nothing <| List.map extractShortDesc children
-
-        Comment _ ->
-            Nothing
-
-
 {-| try and pull out the first image in the infobox of a wikipage
 -}
-grabImg : Parser.Node -> Maybe Parser.Node
+grabImg : Html.Parser.Node -> Maybe Html.Parser.Node
 grabImg wikipage =
     let
         imgs =
@@ -110,3 +99,79 @@ grabImg wikipage =
             imgs ++ grabElements "img" wikipage
     in
     withBackups |> List.filter (getAttr "width" >> Maybe.andThen String.toInt >> Maybe.map ((<) 50) >> Maybe.withDefault False) |> List.head
+
+
+wikilink : Parser String
+wikilink =
+    succeed identity
+        |. symbol "<a href=\"/wiki/"
+        |= (getChompedString <|
+                succeed ()
+                    |. chompUntil "\""
+           )
+
+
+shortDescription : Parser String
+shortDescription =
+    succeed identity
+        |. symbol "<div class=\"shortdescription"
+        |. chompUntil ">"
+        |. symbol ">"
+        |= (getChompedString <|
+                succeed ()
+                    |. chompUntil "<"
+           )
+
+
+{-| try parsing the some string at every spot that begins with the given marker
+-}
+findMatches : String -> Parser a -> String -> List a
+findMatches startMarker parser source =
+    let
+        indices =
+            String.indexes startMarker source
+
+        parseAt : Int -> Maybe a
+        parseAt idx =
+            case Parser.run parser (String.dropLeft idx source) of
+                Ok parsed ->
+                    Just parsed
+
+                Err _ ->
+                    Nothing
+    in
+    List.map parseAt indices |> flatten
+
+
+{-| pull out the short description from the wikipage html
+-}
+extractShortDesc : String -> String
+extractShortDesc html =
+    findMatches "<div class=\"shortdescription" shortDescription html
+        |> maxBy String.length
+        |> Maybe.withDefault "No description found"
+
+
+{-| retrieve all the wikilink ahref tags from the source html
+-}
+linksOn : String -> List String
+linksOn html =
+    let
+        isUnwanted title =
+            List.any (\ns -> String.startsWith (ns ++ ":") title) unwantedNamespaces
+    in
+    findMatches "<a href=" wikilink html |> List.filter (isUnwanted >> not)
+
+
+{-| convert wikipage html to just a list of its wikilinks
+-}
+createBackUpLinkList : String -> Node
+createBackUpLinkList html =
+    let
+        anchorTexts =
+            linksOn html
+                |> Set.fromList
+                |> Set.toList
+                |> List.map (\wl -> Element "a" [ ( "href", "/wiki/" ++ wl ) ] [ Text <| String.replace "_" " " wl ])
+    in
+    List.intersperse (Element "br" [] []) anchorTexts |> Element "div" []

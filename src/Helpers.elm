@@ -231,16 +231,19 @@ getAttr attr node =
             Nothing
 
 
-{-| monoidal combining method for Maybes
+{-| flatten a list of maybes by filtering out the Nothings
 -}
-firstMaybe : Maybe a -> Maybe a -> Maybe a
-firstMaybe left right =
-    case left of
-        Nothing ->
-            right
+flatten : List (Maybe a) -> List a
+flatten data =
+    case data of
+        Nothing :: rest ->
+            flatten rest
 
-        justLeft ->
-            justLeft
+        (Just x) :: rest ->
+            x :: flatten rest
+
+        [] ->
+            []
 
 
 {-| create a bootstrap row with one element
@@ -361,6 +364,8 @@ type alias Segment =
     { username : String, seq : List String }
 
 
+{-| return the best segment that connects each consecutive pair of destinations
+-}
 bestSegs : List String -> List Segment -> List Segment
 bestSegs dests segs =
     let
@@ -371,3 +376,7 @@ bestSegs dests segs =
                 |> maxesBy (.seq >> List.length >> negate)
     in
     sliding2 dests |> List.concatMap best
+
+
+unwantedNamespaces =
+    [ "File", "Special", "Wikipedia", "Category", "Talk", "Help", "Template", "Template_talk", "Portal" ]

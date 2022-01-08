@@ -75,7 +75,8 @@ viewWelcome options =
                         , text """You can play alone just by hosting your own game and forgetting to invite your friends"""
                         , break 2
                         , text """It is also possible that you will run into issues connecting with your friends for a variety of reasons.
-                                If that's the case then you might just agree on a seed together and everyone host their own game"""
+                                If that's the case then you might just agree on a seed together and everyone host their own game.
+                                (Currently, joining a game does not work with Safari)"""
                         ]
                     ]
 
@@ -187,9 +188,6 @@ viewNode n =
         -- we want to reroute the wikilinks to onClick events
         Element "a" (( "href", link ) :: attrs) children ->
             let
-                unwantedNamespaces =
-                    [ "File", "Special", "Wikipedia", "Category", "Talk", "Help", "Template", "Template_talk", "Portal" ]
-
                 isUnwantedNamespace =
                     List.any (\ns -> String.startsWith ("/wiki/" ++ ns ++ ":") link) unwantedNamespaces
             in
