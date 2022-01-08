@@ -91,6 +91,7 @@
         let chromeAgent = userAgentString.indexOf("Chrome") > -1;
         let safariAgent = !chromeAgent && userAgentString.indexOf("Safari") > -1;
 
+
         window.addEventListener("beforeunload", function(e){
            if (peer != null) { peer.destroy(); }
 
@@ -119,7 +120,7 @@
                 }
                 peerOptions = {debug : 2}
                 if (safariAgent) { peerOptions.serialization = "json"; }
-
+                console.log("peer options:", peerOptions);
                 peer = new Peer(null, peerOptions);
 
                 peer.on('open', function(id) {
