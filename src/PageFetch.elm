@@ -39,7 +39,7 @@ requestPage : String -> Cmd FetchResult
 requestPage title =
     let
         fixedTitle =
-            String.replace "&" "%26" title
+            title |> String.replace "&" "%26" |> String.replace "+" "%2B"
     in
     Http.get
         { url = "https://still-woodland-82497.herokuapp.com/https://en.wikipedia.org/w/api.php?action=parse&prop=text&redirects=true&format=json&page=" ++ fixedTitle
