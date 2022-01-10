@@ -5926,7 +5926,7 @@ titles =
         , "Harrods"
         , "Palace_of_Whitehall"
         , "Leaning_Tower_of_Pisa"
-        , "Death_of_Diana,_Princess_of_Wales,_conspiracy_theories"
+        , "Conspiracy_theories_about_the_death_of_Diana,_Princess_of_Wales"
         , "Abul_A'la_Maududi"
         , "IKEA"
         , "Bupropion"
