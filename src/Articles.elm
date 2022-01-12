@@ -9107,7 +9107,6 @@ titles =
         , "This_Is_Spinal_Tap"
         , "Fulton_J._Sheen"
         , "Monty_Python"
-        , "Edward_VI_of_England"
         , "Asteroid"
         , "Late_Middle_Ages"
         , "7_March_Speech_of_Bangabandhu"
