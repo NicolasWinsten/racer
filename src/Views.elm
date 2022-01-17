@@ -478,7 +478,7 @@ view model =
         Fetching title ->
             h1 [] [ text <| "Fetching " ++ title ++ " ..." ]
 
-        Review playeruuid ->
+        Review playersToCompare ->
             let
                 timeInSec time =
                     time // 100
@@ -524,7 +524,7 @@ view model =
                                         toString (f player)
 
                                     else
-                                        "DNE"
+                                        "DNF"
 
                                 name =
                                     if model.options.username == player.username then
@@ -533,7 +533,7 @@ view model =
                                     else
                                         text player.username
                             in
-                            [ Html.a [ class "hoverUnderline", href "#", onClick <| ReviewPlayer player.uuid ] [ name ], text <| " " ++ stat ]
+                            [ Html.a [ class "hoverUnderline", href "#", onClick <| ToggleReviewPlayer player.uuid ] [ name ], text <| " " ++ stat ]
                                 |> span []
 
                         sortedPlayersView =
@@ -554,22 +554,32 @@ view model =
                         [ div [ class "row" ] [ div [ class "col" ] [ timeBoard ], div [ class "col" ] [ lengthBoard ] ]
                         ]
 
-                pathView =
-                    -- show the path of the highlighted player
-                    case List.filter (.uuid >> (==) playeruuid) playerList of
-                        player :: _ ->
-                            let
-                                listView =
-                                    player.path |> List.reverse |> List.map (viewLink destTitles) |> List.intersperse (rightarrow 1) |> div []
-                            in
-                            if player.finished then
-                                div [ class "container" ] [ singleRow <| h3 [] [ text <| player.username ++ "'s path" ], singleRow listView ]
+                comparePlayersView =
+                    -- compare the path segments of the highlighted players
+                    let
+                        players =
+                            List.filter (\p -> List.member p.uuid playersToCompare) playerList
 
-                            else
-                                div [ class "container" ] [ singleRow <| h3 [] [ text <| player.username ++ " hasn't finished yet" ] ]
+                        getPathSegments player =
+                            player.path
+                                |> List.reverse
+                                |> threads (\dest -> List.member dest destTitles)
+                                |> List.map (Tuple.pair player.username)
 
-                        [] ->
-                            text "Problem displaying player path"
+                        playersSegments =
+                            List.map getPathSegments players
+                                |> transpose
+
+                        viewPlayerSegment ( username, seg ) =
+                            div [ class "row mb-2" ]
+                                [ singleRow <|
+                                    div []
+                                        [ Html.b [] [ text <| username ++ " : " ]
+                                        , span [] (seg |> List.map (viewLink destTitles) |> List.intersperse (rightarrow 1))
+                                        ]
+                                ]
+                    in
+                    List.map (List.map viewPlayerSegment >> div [ class "row mb-5" ]) playersSegments |> div [ class "container-fluid mb-5" ]
 
                 unfinishedPlayersView =
                     let
@@ -577,7 +587,7 @@ view model =
                             div [ class "col-3" ] [ Html.b [] [ text player.username ], Html.br [] [], viewLink destTitles player.currentTitle ]
                     in
                     if List.length unfinishedPlayers > 0 then
-                        div [ class "container.fluid" ] [ singleRow <| h3 [] [ text "unfinished players" ], div [ class "row" ] <| List.map viewPlayer unfinishedPlayers ]
+                        div [ class "container-fluid mb-5" ] [ singleRow <| h3 [] [ text "unfinished players" ], div [ class "row" ] <| List.map viewPlayer unfinishedPlayers ]
 
                     else
                         text ""
@@ -585,12 +595,10 @@ view model =
             div [ class "container-fluid" ]
                 [ boardsView
                 , Html.hr [] []
-                , singleRow <| text "Click on a player's name to see their path"
+                , singleRow <| text "Click on a player's name to see their paths"
                 , break 2
-                , singleRow pathView
-                , break 2
+                , comparePlayersView
                 , unfinishedPlayersView
-                , break 2
                 , viewBestSegments playerList destTitles
                 , break 2
                 , singleRow <|

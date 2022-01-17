@@ -242,7 +242,7 @@ update msg model =
                                 { state | path = newPath }
                     in
                     if isPathCompleted then
-                        ( { model | window = Review model.options.uuid, gameState = newGameState }, Cmd.batch [ signalGameFinished, signalTitleReached, transition ] )
+                        ( { model | window = Review [ model.options.uuid ], gameState = newGameState }, Cmd.batch [ signalGameFinished, signalTitleReached, transition ] )
 
                     else
                         ( { model | window = InPage page, gameState = newGameState }, Cmd.batch [ signalTitleReached, transition ] )
@@ -555,15 +555,28 @@ update msg model =
             in
             ( { model | options = { options | uuid = uuid } }, Cmd.none )
 
-        ReviewPlayer uuid ->
-            ( { model | window = Review uuid }, Cmd.none )
+        ToggleReviewPlayer uuid ->
+            case model.window of
+                Review highlightedPlayers ->
+                    let
+                        newHighlightedPlayers =
+                            if List.member uuid highlightedPlayers then
+                                List.filter ((/=) uuid) highlightedPlayers
+
+                            else
+                                uuid :: highlightedPlayers
+                    in
+                    ( { model | window = Review newHighlightedPlayers }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
         GiveUp ->
             let
                 peerMsg =
                     PeerPort.sendData <| PeerPort.gameFinish model.options.uuid (List.map .title model.gameState.path) model.gameState.time
             in
-            ( { model | window = Review model.options.uuid }, peerMsg )
+            ( { model | window = Review [ model.options.uuid ] }, peerMsg )
 
         ClickedNewGame ->
             if model.options.isHost then

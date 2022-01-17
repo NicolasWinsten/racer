@@ -117,7 +117,7 @@ type Msg
     | PeerMsg PeerPort.PeersMsg
     | GotUUID Int
     | ClickedNewGame
-    | ReviewPlayer Int --uuid of player to highlight in Review window
+    | ToggleReviewPlayer Int --uuid of player to highlight in Review window
     | NoOp
 
 
@@ -126,7 +126,7 @@ type Window
     | Fetching String
     | PreGame
     | Preview
-    | Review Int --uuid of player to highlight
+    | Review (List Int) --uuids of players to compare
     | Bad String
 
 

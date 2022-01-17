@@ -153,6 +153,26 @@ replaceFirstBy f oldItem newItem items =
                 thisItem :: replaceFirstBy f oldItem newItem rest
 
 
+transpose : List (List a) -> List (List a)
+transpose data =
+    case data of
+        [] :: rest ->
+            transpose rest
+
+        [] ->
+            []
+
+        x ->
+            let
+                heads =
+                    List.map List.head x |> flatten
+
+                tails =
+                    List.map List.tail x |> flatten
+            in
+            heads :: transpose tails
+
+
 {-| convert Parser attribute to Html attribute
 -}
 attr2htmlattr : Parser.Attribute -> Html.Attribute msg
@@ -311,6 +331,27 @@ segments f data =
 
                 _ ->
                     []
+
+        [] ->
+            []
+
+
+{-| same as segments but the threads dont have to be completed
+f only needs to return true for the head of a thread
+-}
+threads : (a -> Bool) -> List a -> List (List a)
+threads f data =
+    case dropWhile (f >> not) data of
+        x :: xs ->
+            case pull (f >> not) xs of
+                ( ys, z :: [] ) ->
+                    [ x :: ys ++ [ z ] ]
+
+                ( ys, z :: zs ) ->
+                    (x :: ys ++ [ z ]) :: threads f (z :: zs)
+
+                ( ys, [] ) ->
+                    [ x :: ys ]
 
         [] ->
             []
