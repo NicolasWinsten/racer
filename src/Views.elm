@@ -57,7 +57,7 @@ viewWelcome options =
         descSection =
             singleRow <|
                 Html.p []
-                    [ Html.img [ class "m-2", style "float" "right", src "assets/wikilogo.png", width 300 ] []
+                    [ Html.img [ class "m-2", style "float" "right", src "assets/wikilogo.png", width 300, alt "Wikipedia Game" ] []
                     , Html.p []
                         [ text """
                               The aim of the game is to race through wikipedia while hitting all the important pages in order.
@@ -120,7 +120,7 @@ viewWelcome options =
     div []
         [ backToMyPageLink
         , div [ class "container" ]
-            [ singleRow <| h1 [] [ text "Let's Race" ]
+            [ singleRow <| h1 [] [ text "peer-to-peer Wikipedia game" ]
             , descSection
             , Html.hr [] []
             , singleRow usernameInput
