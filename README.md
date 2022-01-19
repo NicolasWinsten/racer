@@ -3,7 +3,7 @@
 
 This is a toy project I made while learning Elm.
 
-This game is a peer-to-peer ([PeerJS](https://peerjs.com/)) version of the [WikiGame](https://www.thewikigame.com/) you can play with your friends.
+This game is a peer-to-peer ([PeerJS](https://peerjs.com/)) version of the [WikiGame](https://en.wikipedia.org/wiki/Wikipedia:Wiki_Game) you can play with your friends.
 
 Play the game [here](https://nicolaswinsten.github.io/racer).
 
