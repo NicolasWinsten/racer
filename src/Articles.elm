@@ -547,7 +547,7 @@ titles =
         , "Man"
         , "Famke_Janssen"
         , "Great_Wall_of_China"
-        , "Armenian_Genocide"
+        , "Armenian_genocide"
         , "Nickelodeon"
         , "Anatomy"
         , "Kanye_West"
