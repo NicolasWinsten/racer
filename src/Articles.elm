@@ -2892,7 +2892,7 @@ titles =
         , "Vitamin_C"
         , "Sui_dynasty"
         , "Battle_of_Gaugamela"
-        , "The_Little_Mermaid_(upcoming_film)"
+        , "The_Little_Mermaid_(2023_film)"
         , "Otho"
         , "Francisco_Franco"
         , "Hera"
