@@ -6836,7 +6836,6 @@ titles =
         , "Asghar_Farhadi"
         , "Adolf_Eichmann"
         , "Spike_Lee"
-        , "Deaths_in_2021"
         , "Leopold_II,_Holy_Roman_Emperor"
         , "Sam_Houston"
         , "Author"
