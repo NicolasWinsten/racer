@@ -145,6 +145,36 @@ viewLink dests title =
         element
 
 
+viewPath : { username : Maybe String, path : List String, dests : List String, showLength : Bool } -> Html msg
+viewPath { username, path, dests, showLength } =
+    let
+        first =
+            List.head path |> Maybe.withDefault ""
+
+        final =
+            last path |> Maybe.withDefault ""
+
+        isComplete =
+            List.member first dests && List.member final dests && List.length path > 1
+
+        lengthText =
+            if isComplete then
+                " : (" ++ String.fromInt (List.length path - 1) ++ ")"
+
+            else
+                " : (DNF)"
+    in
+    span []
+        [ Maybe.map (\u -> Html.b [] [ text <| u ++ " : " ]) username |> Maybe.withDefault (text "")
+        , span [] (path |> List.map (viewLink dests) |> List.intersperse (rightarrow 1))
+        , if showLength then
+            Html.b [] [ text lengthText ]
+
+          else
+            text ""
+        ]
+
+
 {-| display the best path segments from the players for each consecutive pair of destinations
 -}
 viewBestSegments : List Peer -> List String -> Html msg
@@ -161,11 +191,7 @@ viewBestSegments players dests =
         viewSeg : Segment -> Html msg
         viewSeg seg =
             div [ class "row mb-3" ]
-                [ singleRow <|
-                    div []
-                        [ Html.b [] [ text <| seg.username ++ " : " ]
-                        , span [] (seg.seq |> List.map (viewLink dests) |> List.intersperse (rightarrow 1))
-                        ]
+                [ singleRow <| viewPath { username = Just seg.username, path = seg.seq, dests = dests, showLength = True }
                 ]
 
         segViews =
@@ -270,8 +296,8 @@ viewPeerLocs peers =
 
 {-| view the path of titles highlighting the ones that are also destinations
 -}
-viewPath : List String -> List String -> Html msg
-viewPath titles dests =
+viewPathVertical : List String -> List String -> Html msg
+viewPathVertical titles dests =
     let
         toText title =
             if List.member title dests then
@@ -460,7 +486,7 @@ view model =
                             pathTitles =
                                 List.map .title model.gameState.path
                         in
-                        viewPath pathTitles destTitles
+                        viewPathVertical pathTitles destTitles
 
                     else
                         viewPeerLocs <| Dict.values model.peers
@@ -572,11 +598,7 @@ view model =
 
                         viewPlayerSegment ( username, seg ) =
                             div [ class "row mb-2" ]
-                                [ singleRow <|
-                                    div []
-                                        [ Html.b [] [ text <| username ++ " : " ]
-                                        , span [] (seg |> List.map (viewLink destTitles) |> List.intersperse (rightarrow 1))
-                                        ]
+                                [ singleRow <| viewPath { username = Just username, path = seg, dests = destTitles, showLength = True }
                                 ]
                     in
                     List.map (List.map viewPlayerSegment >> div [ class "row mb-5" ]) playersSegments |> div [ class "container-fluid mb-5" ]
