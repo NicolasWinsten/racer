@@ -3527,7 +3527,7 @@ titles =
         , "Cattle"
         , "David_Hume"
         , "National_Basketball_Association_Christmas_games"
-        , "Cnut_the_Great"
+        , "Cnut"
         , "Continental_Army"
         , "Parsis"
         , "Thomas_Edison"
