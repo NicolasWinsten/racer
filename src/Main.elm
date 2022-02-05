@@ -282,7 +282,7 @@ update msg model =
                     model.gameState
 
                 newState =
-                    { state | time = state.time + 1 }
+                    { state | time = state.time + 10 }
             in
             ( { model | gameState = newState }, Cmd.none )
 
@@ -602,7 +602,7 @@ subscriptions model =
         tickSub =
             case model.window of
                 InPage _ ->
-                    Time.every 10 Tick
+                    Time.every 100 Tick
 
                 _ ->
                     Sub.none
