@@ -119,7 +119,7 @@
                 if (peer != null) {
                     peer.destroy();
                 }
-                peerOptions = {debug : 3, serialization : "json" };
+                peerOptions = {debug : 3, serialization : "json", host : "peerjs-nick.herokuapp.com", port : 443, secure : true };
                 console.log("peer options:", peerOptions);
                 peer = new Peer(null, peerOptions);
 
