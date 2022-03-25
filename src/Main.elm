@@ -311,16 +311,29 @@ update msg model =
             else if not flag.isHost && String.isEmpty model.options.joinId then
                 ( model, makeToast "You have to provide the host's game ID to join their game" )
 
-            else if String.isEmpty model.options.peerId then
-                ( model, makeToast "Your socket connection hasn't been initialized. Refresh the page if this issue persists." )
-
             else
                 let
-                    ( previewModel, cmd ) =
+                    ( previewModel, makeGameCmd ) =
                         createGame model
+
+                    peerUninitialized =
+                        String.isEmpty model.options.peerId
 
                     initPeerCmd =
                         PeerPort.initPeer { isHost = flag.isHost, username = model.options.username, connectId = model.options.joinId, uuid = model.options.uuid }
+
+                    noFriendsToast =
+                        makeToast "Your socket connection hasn't been initialized. Try refreshing if you'd like to play with friends."
+
+                    cmd =
+                        if flag.isHost && peerUninitialized then
+                            Cmd.batch [ makeGameCmd, noFriendsToast, initPeerCmd ]
+
+                        else if flag.isHost then
+                            Cmd.batch [ makeGameCmd, initPeerCmd ]
+
+                        else
+                            Cmd.batch [ initPeerCmd, makeToast "attempting to join game..." ]
 
                     newOptions =
                         let
@@ -330,10 +343,10 @@ update msg model =
                         { options | isHost = flag.isHost }
                 in
                 if flag.isHost then
-                    ( { previewModel | options = { newOptions | joinId = "" } }, Cmd.batch [ cmd, initPeerCmd ] )
+                    ( { previewModel | options = { newOptions | joinId = "" } }, cmd )
 
                 else
-                    ( { model | options = newOptions }, Cmd.batch [ initPeerCmd, makeToast "attempting to join game..." ] )
+                    ( { model | options = newOptions }, cmd )
 
         PeerMsg (PeerPort.IdGenerated id) ->
             let
