@@ -19,15 +19,15 @@ import Url exposing (percentDecode)
 
 
 type FetchResult
-    = FetchResult (Result Http.Error PageHtml)
+    = FetchResult String (Result Http.Error PageHtml)
 
 
 type alias PageHtml =
     { title : String, html : String }
 
-
+-- TODO use the requested title to make sure redirected titles are understood
 type alias PageContent =
-    { title : String, content : Html.Parser.Node, desc : String, image : Maybe String }
+    { title : String, content : Html.Parser.Node, desc : String, image : Maybe String, requestedTitle : String }
 
 
 pageDecoder : Decoder PageHtml
@@ -43,7 +43,7 @@ requestPage title =
     in
     Http.get
         { url = "https://en.wikipedia.org/w/api.php?action=parse&prop=text&redirects=true&format=json&origin=*&page=" ++ fixedTitle
-        , expect = Http.expectJson FetchResult pageDecoder
+        , expect = Http.expectJson (FetchResult title) pageDecoder
         }
 
 
@@ -55,7 +55,7 @@ getPage title =
 {-| convert the api parse result to a parsed Node
 -}
 content : FetchResult -> Result Http.Error PageContent
-content (FetchResult res) =
+content (FetchResult requestedTitle res) =
     case res of
         Ok page ->
             let
@@ -69,6 +69,7 @@ content (FetchResult res) =
                         , content = node
                         , desc = desc
                         , image = grabImg node
+                        , requestedTitle = requestedTitle
                         }
 
                     _ ->
@@ -81,6 +82,7 @@ content (FetchResult res) =
                                 ]
                         , desc = desc
                         , image = Nothing
+                        , requestedTitle = requestedTitle
                         }
 
         Err error ->
