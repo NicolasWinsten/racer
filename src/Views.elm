@@ -7,7 +7,7 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Html.Parser as Parser exposing (Node(..))
 import Model exposing (..)
-
+import Regex
 
 
 {-
@@ -209,6 +209,24 @@ viewBestSegments players dests =
 -}
 viewNode : Parser.Node -> Html Msg
 viewNode n =
+    let
+        -- the html fetched from the wiki api has local urls in their links
+        -- so we need to add https 
+        imgurlstart = Maybe.withDefault Regex.never <|
+            Regex.fromString "//upload.wikimedia.org"
+        fixurls = Regex.replace imgurlstart (\_ -> "https://upload.wikimedia.org")
+
+        attr2htmlattr (prop, val) = case prop of
+            "src" -> Html.Attributes.attribute "src" (fixurls val)
+            "srcset" -> Html.Attributes.attribute "srcset" (fixurls val)
+            _ -> Html.Attributes.attribute prop val
+        
+        -- make the straightforward conversion to Html object
+        convert parsedNode = case parsedNode of
+            Element tag attrs children -> node tag (List.map attr2htmlattr attrs) (List.map viewNode children)
+            Text s -> text s
+            Comment _ -> text ""
+    in
     case n of
         -- we want to reroute the wikilinks to onClick events
         Element "a" (( "href", link ) :: attrs) children ->
@@ -250,33 +268,27 @@ viewNode n =
             text ""
 
         -- hide boring headers
-        Element "span" (( "class", clazz ) :: ( "id", headline ) :: attrs) children ->
+        Element "span" (( "class", clazz ) :: ( "id", headline ) :: _) _ as header ->
             if String.contains "mw-headline" clazz && List.member headline [ "Citations", "Notes", "References" ] then
                 text ""
 
             else
-                span (class clazz :: id headline :: List.map attr2htmlattr attrs) (List.map viewNode children)
+                convert header
 
         -- hide references section
-        Element "div" (( "class", clazz ) :: attrs) children ->
+        Element "div" (( "class", clazz ) :: _) _ as el ->
             if String.startsWith "reflist" clazz then
                 text ""
 
             else
-                div (class clazz :: List.map attr2htmlattr attrs) (List.map viewNode children)
+                convert el
 
         -- hide superscript tags, they're citation links
         Element "sup" _ _ ->
             text ""
 
-        Element tag attrlist children ->
-            node tag (List.map attr2htmlattr attrlist) (List.map viewNode children)
-
-        Text string ->
-            text string
-
-        Comment _ ->
-            text ""
+        el ->
+            convert el
 
 
 {-| view each connected peer and the last destination they hit
@@ -331,7 +343,7 @@ viewPagePreviews dests =
 
                             Loaded loadedPage ->
                                 [ h5 [] [ text loadedPage.title ]
-                                , Maybe.map viewNode loadedPage.image
+                                , Maybe.map (\url -> Html.img [src url] []) loadedPage.image
                                     |> Maybe.withDefault (text "")
                                     |> resizedImg
                                 , Html.i [] [ text loadedPage.desc ]

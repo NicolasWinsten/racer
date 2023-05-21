@@ -27,7 +27,7 @@ type alias PageHtml =
 
 
 type alias PageContent =
-    { title : String, content : Html.Parser.Node, desc : String, image : Maybe Html.Parser.Node }
+    { title : String, content : Html.Parser.Node, desc : String, image : Maybe String }
 
 
 pageDecoder : Decoder PageHtml
@@ -42,7 +42,7 @@ requestPage title =
             title |> String.replace "&" "%26" |> String.replace "+" "%2B"
     in
     Http.get
-        { url = "https://still-woodland-82497.herokuapp.com/https://en.wikipedia.org/w/api.php?action=parse&prop=text&redirects=true&format=json&page=" ++ fixedTitle
+        { url = "https://en.wikipedia.org/w/api.php?action=parse&prop=text&redirects=true&format=json&origin=*&page=" ++ fixedTitle
         , expect = Http.expectJson FetchResult pageDecoder
         }
 
@@ -89,7 +89,7 @@ content (FetchResult res) =
 
 {-| try and pull out the first image in the infobox of a wikipage
 -}
-grabImg : Html.Parser.Node -> Maybe Html.Parser.Node
+grabImg : Html.Parser.Node -> Maybe String
 grabImg wikipage =
     let
         imgs =
@@ -99,7 +99,11 @@ grabImg wikipage =
         withBackups =
             imgs ++ grabElements "img" wikipage
     in
-    withBackups |> List.filter (getAttr "width" >> Maybe.andThen String.toInt >> Maybe.map ((<) 50) >> Maybe.withDefault False) |> List.head
+    withBackups
+        |> List.filter (getAttr "width" >> Maybe.andThen String.toInt >> Maybe.map ((<) 50) >> Maybe.withDefault False)
+        |> List.head
+        |> Maybe.andThen (getAttr "src")
+        |> Maybe.map (\url -> "https:" ++ url)
 
 
 wikilink : Parser String

@@ -173,13 +173,6 @@ transpose data =
             heads :: transpose tails
 
 
-{-| convert Parser attribute to Html attribute
--}
-attr2htmlattr : Parser.Attribute -> Html.Attribute msg
-attr2htmlattr ( prop, val ) =
-    Html.Attributes.attribute prop val
-
-
 {-| query all the elements of the given tag from the parent node (including the parent node)
 -}
 grabElements : String -> Parser.Node -> List Parser.Node
