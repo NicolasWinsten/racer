@@ -26,6 +26,11 @@ type alias PageHtml =
     { title : String, html : String }
 
 -- TODO use the requested title to make sure redirected titles are understood
+-- TODO allow host to set the destinations manually
+-- TODO figure out how to retrieve the table of contents back
+-- TODO figure out a way to customize the wikipedia content better
+-- TODO remove the navbox at the bottom
+-- TODO use d3 to draw a DAG of the player's paths instead of just listing them
 type alias PageContent =
     { title : String, content : Html.Parser.Node, desc : String, image : Maybe String, requestedTitle : String }
 
@@ -42,7 +47,7 @@ requestPage title =
             title |> String.replace "&" "%26" |> String.replace "+" "%2B"
     in
     Http.get
-        { url = "https://en.wikipedia.org/w/api.php?action=parse&prop=text&redirects=true&format=json&origin=*&page=" ++ fixedTitle
+        { url = "https://en.wikipedia.org/w/api.php?action=parse&prop=text&redirects=true&format=json&origin=*&disabletoc=0&page=" ++ fixedTitle
         , expect = Http.expectJson (FetchResult title) pageDecoder
         }
 
