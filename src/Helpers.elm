@@ -10,6 +10,11 @@ import Html.Parser.Util
 import Random
 
 
+{-| guard a Cmd with a boolean flag
+if the flag is False, then No-op
+-}
+cmdIf : Bool -> Cmd msg -> Cmd msg
+cmdIf flag cmd = if flag then cmd else Cmd.none
 
 {-
    Some helper functions to get stuff done

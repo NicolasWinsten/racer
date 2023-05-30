@@ -1,17 +1,21 @@
+{-
+This module contains the functionality for communicating with
+other players through PeerJS [https://peerjs.com/]
+-}
+
 port module PeerPort exposing
     ( PeersMsg(..)
-    , gameFinish
-    , gameInfo
-    , gameStarted
     , initPeer
     , makePeer
-    , newGame
-    , peerConnect
-    , peerDisconnect
-    , receiveDataFromJS
-    , seedInfo
-    , sendData
-    , titleReach
+    , signalGameFinish
+    , sendGameInfo
+    , signalGameStarted
+    , signalNewGame
+    , signalPeerConnected
+    , signalPeerDisconnected
+    , receivePeerJSData
+    , sendSeedInfo
+    , signalTitleReach
     )
 
 import Json.Decode as Decode exposing (Decoder, Value, decodeValue, field)
@@ -30,10 +34,10 @@ port sendData : Value -> Cmd msg
 port receiveData : (Value -> msg) -> Sub msg
 
 
-{-| subscription for any data coming in from javascript, in this case PeerJS info
+{-| subscription for any data coming in from PeerJS
 -}
-receiveDataFromJS : Sub PeersMsg
-receiveDataFromJS =
+receivePeerJSData : Sub PeersMsg
+receivePeerJSData =
     let
         makeDataValue res =
             case res of
@@ -63,6 +67,7 @@ type PeersMsg
     = SeedInfo Int String -- num destinations, seed string
     | GameStart String
     | TitleReach Int String -- uuid, title
+    --TODO | BacktrackedToPage Int String (signal peers when player has moved backwards to a previous page)
     | GameFinish Int (List String) Int -- uuid path time
     | PeerConnect String Int -- username, uuid
     | PeerDisconnect Int -- uuid
@@ -146,21 +151,16 @@ hostWantsNewGame : Decoder PeersMsg
 hostWantsNewGame =
     Decode.map HostWantsNewGame <| field "newGame" Decode.string
 
-
-decoders =
-    [ seedInfoDecoder, gameStartDecoder, titleReachDecoder, gameFinishDecoder, peerConnectDecoder, peerDisconnectDecoder, peerIdGenDecoder, gameInfoDecoder, errorDecoder, hostLostDecoder, hostWantsNewGame ]
-
-
 dataDecoder : Decoder PeersMsg
 dataDecoder =
-    Decode.oneOf decoders
+    Decode.oneOf [ seedInfoDecoder, gameStartDecoder, titleReachDecoder, gameFinishDecoder, peerConnectDecoder, peerDisconnectDecoder, peerIdGenDecoder, gameInfoDecoder, errorDecoder, hostLostDecoder, hostWantsNewGame ]
 
 
 {-| create this users Peer. the Peers id will be sent back in receivesId sub
 -}
 port makePeer : String -> Cmd msg
 
-
+-- TODO separate this functionality into two functions: joinGame and hostGame
 type alias Init =
     -- info to initialize the peer socket with
     { isHost : Bool, connectId : String, username : String, uuid : Int }
@@ -168,42 +168,44 @@ type alias Init =
 
 port initPeer : Init -> Cmd msg
 
-
-createMsg header =
-    \value -> Encode.object [ ( header, value ) ]
-
-
-seedInfo num seed =
-    createMsg "seedInfo" <|
-        Encode.object [ ( "numTitles", Encode.int num ), ( "seed", Encode.string seed ) ]
-
-
-gameStarted msg =
-    createMsg "start" <|
-        Encode.object [ ( "msg", Encode.string msg ) ]
+sendSeedInfo num seed = sendData <|
+    Encode.object [
+        ("seedInfo"
+        , Encode.object [ ( "numTitles", Encode.int num ), ( "seed", Encode.string seed ) ]
+        )
+    ]
+        
 
 
-titleReach uuid title =
-    createMsg "titleReach" <|
-        Encode.object [ ( "uuid", Encode.int uuid ), ( "title", Encode.string title ) ]
+signalGameStarted msg = sendData <|
+    Encode.object [("start", Encode.object [ ( "msg", Encode.string msg ) ])]
 
 
-gameFinish uuid path time =
-    createMsg "finish" <|
-        Encode.object [ ( "uuid", Encode.int uuid ), ( "path", Encode.list Encode.string path ), ( "time", Encode.int time ) ]
+signalTitleReach uuid title = sendData <|
+    Encode.object [
+        ( "titleReach", Encode.object [ ( "uuid", Encode.int uuid ), ( "title", Encode.string title ) ])
+    ]
+        
 
 
-peerConnect username uuid =
-    createMsg "peerConnect" <|
-        Encode.object [ ( "uuid", Encode.int uuid ), ( "username", Encode.string username ) ]
+signalGameFinish uuid path time = sendData <|
+    Encode.object [(
+        "finish", Encode.object [ ( "uuid", Encode.int uuid ), ( "path", Encode.list Encode.string path ), ( "time", Encode.int time ) ]
+    )]
+        
 
 
-peerDisconnect uuid =
-    createMsg "peerDisconnect" <| Encode.object [ ( "uuid", Encode.int uuid ) ]
+signalPeerConnected username uuid = sendData <|
+    Encode.object [("peerConnect", Encode.object [ ( "uuid", Encode.int uuid ), ( "username", Encode.string username ) ])]
+        
 
 
-gameInfo : Int -> Info -> Value
-gameInfo uuid info =
+signalPeerDisconnected uuid = sendData <|
+    Encode.object [("peerDisconnect", Encode.object [ ( "uuid", Encode.int uuid ) ])]
+
+
+sendGameInfo : Int -> Info -> Cmd msg
+sendGameInfo uuid info =
     let
         encodePeer : Peer -> Value
         encodePeer peer =
@@ -212,10 +214,8 @@ gameInfo uuid info =
         encodeInfo =
             Encode.object [ ( "seed", Encode.string info.seed ), ( "numDestinations", Encode.int info.numDestinations ), ( "peers", Encode.list encodePeer info.peers ), ( "started", Encode.bool info.started ) ]
     in
-    createMsg "gameInfo" <|
-        Encode.object [ ( "uuid", Encode.int uuid ), ( "info", encodeInfo ) ]
-
-
-newGame : String -> Value
-newGame msg =
+    sendData
+    <| Encode.object [("gameInfo", Encode.object [ ( "uuid", Encode.int uuid ), ( "info", encodeInfo ) ])]
+        
+signalNewGame msg = sendData <|
     Encode.object [ ( "newGame", Encode.string msg ) ]
