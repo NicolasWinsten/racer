@@ -1,29 +1,29 @@
-module PageFetch exposing (PageContent, getPage)
+module PageFetch exposing (PageContent, getPage, getPreview)
 
 import Helpers exposing (..)
-import Html.Parser exposing (Attribute, Node(..))
-import Http
-import Json.Decode exposing (Decoder, field, map2, string)
+import Html.Parser exposing (Node(..))
+import Parser exposing (DeadEnd)
+import Http exposing (Response(..))
+import Json.Decode exposing (Decoder, field, string)
+import Json.Decode as Decode
 import List
 import Maybe
-import Parser exposing ((|.), (|=), Parser, chompUntil, getChompedString, succeed, symbol)
+import Parser
 import Result
-import Set
-import Url exposing (percentDecode)
-
-
+import Task exposing (Task)
+import Types exposing (..)
 
 {-
    This module provides functionality for fetching the content of wikipages
 -}
 
 
-type FetchResult
-    = FetchResult String (Result Http.Error PageHtml)
-
 
 type alias PageHtml =
-    { title : String, html : String }
+    { title : Title, html : String }
+
+type alias PageContent = Page
+type alias PageSummary = PagePreview
 
 -- TODO use the requested title to make sure redirected titles are understood
 -- TODO allow host to set the destinations manually
@@ -31,162 +31,148 @@ type alias PageHtml =
 -- TODO figure out a way to customize the wikipedia content better
 -- TODO remove the navbox at the bottom
 -- TODO use d3 to draw a DAG of the player's paths instead of just listing them
-type alias PageContent =
-    { title : String, content : Html.Parser.Node, desc : String, image : Maybe String, requestedTitle : String }
+
+resolver : Decoder a -> Response String -> Result String a
+resolver decoder response = case response of
+    BadUrl_ str -> Err str
+    Timeout_ -> Err "timeout"
+    NetworkError_ -> Err "network error"
+    BadStatus_ meta _ -> Err <|
+        String.concat [ String.fromInt meta.statusCode, " ", meta.statusText, " : ", meta.url ]
+    GoodStatus_ _ body ->
+        Decode.decodeString decoder body
+            |> Result.mapError (always <| "could not parse body of http response: \n" ++ body)
 
 
 pageDecoder : Decoder PageHtml
 pageDecoder =
-    field "parse" <| map2 PageHtml (field "title" string) (field "text" (field "*" string))
+    field "parse"
+        <| Decode.map2 PageHtml
+            (field "title" string)
+            (field "text" (field "*" string)) 
 
-
-requestPage : String -> Cmd FetchResult
+requestPage : Title -> Task String PageHtml
 requestPage title =
-    let
-        fixedTitle =
-            title |> String.replace "&" "%26" |> String.replace "+" "%2B"
-    in
-    Http.get
-        { url = "https://en.wikipedia.org/w/api.php?action=parse&prop=text&redirects=true&format=json&origin=*&disabletoc=0&page=" ++ fixedTitle
-        , expect = Http.expectJson (FetchResult title) pageDecoder
+    Http.task
+        { method = "GET"
+        , headers = []
+        , body = Http.emptyBody
+        , url = "https://en.wikipedia.org/w/api.php?action=parse&prop=text|sections&redirects=true&format=json&origin=*&page=" ++ encodeTitle title
+        , timeout = Just 5000
+        , resolver = Http.stringResolver <| resolver pageDecoder
         }
 
 
-getPage : String -> Cmd (Result Http.Error PageContent)
+previewDecoder : Decoder PageSummary
+previewDecoder =
+    let thumbnailDecoder = Decode.map3
+            (\source width height -> {src=source, width=width, height=height})
+            (field "source" string)
+            (field "width" Decode.float)    
+            (field "height" Decode.float)    
+    in
+    Decode.map4
+        (\title thumbnail description shortdesc -> {title=title, thumbnail=thumbnail, description=description, shortdescription=shortdesc})
+        (field "title" string)
+        (Decode.maybe (field "thumbnail" thumbnailDecoder))
+        (Decode.map (Maybe.withDefault "") (Decode.maybe (field "extract" string)))
+        (Decode.map (Maybe.withDefault "") (Decode.maybe (field "description" string)))
+
+{-| request the redirected title, thumbnail, and description of a wikipedia article
+-}
+getPreview : Title -> Task String PageSummary
+getPreview title = Http.task
+        { method = "GET"
+        , headers = []
+        , body = Http.emptyBody
+        , url = "https://en.wikipedia.org/api/rest_v1/page/summary/" ++ encodeTitle title ++ "?redirect=true&origin=*"
+        , timeout = Just 5000
+        , resolver = Http.stringResolver <| resolver previewDecoder
+        }
+
+{-|retrieve the and parse the HTML of the given wikipedia article -}
+getPage : Title -> Task String PageContent
 getPage title =
-    requestPage title |> Cmd.map content
+    requestPage title
+        |> Task.andThen
+            (\r -> case content r of
+                Ok pageContent -> Task.succeed pageContent
+                Err parseError -> Task.fail parseError
+            )
 
 
 {-| convert the api parse result to a parsed Node
 -}
-content : FetchResult -> Result Http.Error PageContent
-content (FetchResult requestedTitle res) =
-    case res of
-        Ok page ->
+content : PageHtml -> Result String PageContent
+content {title, html} =
+    case Html.Parser.run Html.Parser.allCharRefs html of
+        Ok (node :: _) -> Ok <|
+            { title = title
+            , content = node
+            }
+        
+        Ok [] -> Err "I parsed no html. This shouldn't happen"
+
+        Err deadEnds -> Err ("I ran into an issue parsing the page for " ++ title ++ " : " ++ deadEndsToString deadEnds)
+
+
+
+{-| elm/parser's implementation of `deadEndsToString` is still "TODO deadEndsToString" in 2023
+https://github.com/elm/parser/blob/02839df10e462d8423c91917271f4b6f8d2f284d/src/Parser.elm#L171
+
+very funny, so we roll our own
+-}
+deadEndsToString : List DeadEnd -> String
+deadEndsToString deadEnds =
+    let
+        deadEndToString : DeadEnd -> String
+        deadEndToString deadEnd =
             let
-                desc =
-                    extractShortDesc page.html
+                position : String
+                position =
+                    "row:" ++ String.fromInt deadEnd.row ++ " col:" ++ String.fromInt deadEnd.col ++ "\n"
             in
-            Ok <|
-                case Html.Parser.run page.html of
-                    Ok (node :: _) ->
-                        { title = page.title
-                        , content = node
-                        , desc = desc
-                        , image = grabImg node
-                        , requestedTitle = requestedTitle
-                        }
+            case deadEnd.problem of
+                Parser.Expecting str ->
+                    "Expecting " ++ str ++ "at " ++ position
 
-                    _ ->
-                        { title = page.title
-                        , content =
-                            Element "div"
-                                []
-                                [ Text "This page is malformed and can't be displayed, but here are the links from it (use Ctrl+f)"
-                                , createBackUpLinkList page.html
-                                ]
-                        , desc = desc
-                        , image = Nothing
-                        , requestedTitle = requestedTitle
-                        }
+                Parser.ExpectingInt ->
+                    "ExpectingInt at " ++ position
 
-        Err error ->
-            Err error
+                Parser.ExpectingHex ->
+                    "ExpectingHex at " ++ position
 
+                Parser.ExpectingOctal ->
+                    "ExpectingOctal at " ++ position
 
-{-| try and pull out the first image in the infobox of a wikipage
--}
-grabImg : Html.Parser.Node -> Maybe String
-grabImg wikipage =
-    let
-        imgs =
-            -- first try the infobox
-            grabByClass "infobox" >> List.concatMap (grabElements "img") <| wikipage
+                Parser.ExpectingBinary ->
+                    "ExpectingBinary at " ++ position
 
-        withBackups =
-            imgs ++ grabElements "img" wikipage
+                Parser.ExpectingFloat ->
+                    "ExpectingFloat at " ++ position
+
+                Parser.ExpectingNumber ->
+                    "ExpectingNumber at " ++ position
+
+                Parser.ExpectingVariable ->
+                    "ExpectingVariable at " ++ position
+
+                Parser.ExpectingSymbol str ->
+                    "ExpectingSymbol " ++ str ++ " at " ++ position
+
+                Parser.ExpectingKeyword str ->
+                    "ExpectingKeyword " ++ str ++ "at " ++ position
+
+                Parser.ExpectingEnd ->
+                    "ExpectingEnd at " ++ position
+
+                Parser.UnexpectedChar ->
+                    "UnexpectedChar at " ++ position
+
+                Parser.Problem str ->
+                    "ProblemString " ++ str ++ " at " ++ position
+
+                Parser.BadRepeat ->
+                    "BadRepeat at " ++ position
     in
-    withBackups
-        |> List.filter (getAttr "width" >> Maybe.andThen String.toInt >> Maybe.map ((<) 50) >> Maybe.withDefault False)
-        |> List.head
-        |> Maybe.andThen (getAttr "src")
-        |> Maybe.map (\url -> "https:" ++ url)
-
-
-wikilink : Parser String
-wikilink =
-    succeed identity
-        |. symbol "<a href=\"/wiki/"
-        |= (getChompedString <|
-                succeed ()
-                    |. chompUntil "\""
-           )
-
-
-shortDescription : Parser String
-shortDescription =
-    succeed identity
-        |. symbol "<div class=\"shortdescription"
-        |. chompUntil ">"
-        |. symbol ">"
-        |= (getChompedString <|
-                succeed ()
-                    |. chompUntil "<"
-           )
-
-
-{-| try parsing the some string at every spot that begins with the given marker
--}
-findMatches : String -> Parser a -> String -> List a
-findMatches startMarker parser source =
-    let
-        indices =
-            String.indexes startMarker source
-
-        parseAt : Int -> Maybe a
-        parseAt idx =
-            case Parser.run parser (String.dropLeft idx source) of
-                Ok parsed ->
-                    Just parsed
-
-                Err _ ->
-                    Nothing
-    in
-    List.map parseAt indices |> flatten
-
-
-{-| pull out the short description from the wikipage html
--}
-extractShortDesc : String -> String
-extractShortDesc html =
-    findMatches "<div class=\"shortdescription" shortDescription html
-        |> maxBy String.length
-        |> Maybe.withDefault "No description found"
-
-
-{-| retrieve all the wikilink ahref tags from the source html
--}
-linksOn : String -> List String
-linksOn html =
-    let
-        isUnwanted title =
-            List.any (\ns -> String.startsWith (ns ++ ":") title) unwantedNamespaces
-    in
-    findMatches "<a href=" wikilink html |> List.filter (isUnwanted >> not)
-
-
-{-| convert wikipage html to just a list of its wikilinks
--}
-createBackUpLinkList : String -> Node
-createBackUpLinkList html =
-    let
-        toText link =
-            link |> percentDecode |> Maybe.withDefault "?" |> String.replace "_" " "
-
-        anchorTexts =
-            linksOn html
-                |> Set.fromList
-                |> Set.toList
-                |> List.map (\wl -> Element "a" [ ( "href", "/wiki/" ++ wl ) ] [ Text <| toText wl ])
-    in
-    List.intersperse (Element "br" [] []) anchorTexts |> Element "div" []
+    List.foldl (++) "" (List.map deadEndToString deadEnds)

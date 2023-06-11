@@ -1,147 +1,77 @@
 module Model exposing (..)
 
-import Dict exposing (Dict)
-import Http
-import PageFetch
-import PeerPort
 import Time
-
-
+import Either exposing (Either(..))
+import Random exposing (Seed)
+import Types exposing (..)
+import WikiGraph exposing (WikiGraphState)
 
 {- Model and Msg types, along with some other helper types -}
 
+{-| settings for the welcome screen
+-}
+type alias WelcomeOpts =
+    { inputJoinId : String
+    , inputName : String
+    , uuid : Maybe PeerId
+    , seed : Seed
+    , displayPages : (Maybe PagePreview, Maybe PagePreview)
+    }
 
-type alias Destination =
-    PageFetch.PageContent
+{-| additional parameters for the lobby
+-}
+type alias LobbyOpts = { numDestinationsInput : Int }
 
-
-type LoadingDestination
-    = Loading String
-    | Loaded Destination --TODO add scenario for an error loading that page
-
-
-extractLoadedDestinations : List LoadingDestination -> List Destination
-extractLoadedDestinations loads =
-    case loads of
-        (Loaded page) :: rest ->
-            page :: extractLoadedDestinations rest
-
-        _ :: rest ->
-            extractLoadedDestinations rest
-
-        [] ->
-            []
-
-
-destIsLoaded : LoadingDestination -> Bool
-destIsLoaded dest =
-    case dest of
-        Loaded _ ->
-            True
-
-        _ ->
-            False
-
-
-doneLoading : List LoadingDestination -> Bool
-doneLoading =
-    List.all destIsLoaded
-
-
-
-{- replace the Loading item in the list with its Loaded page -}
-
-
-replaceWithLoaded : Destination -> List LoadingDestination -> List LoadingDestination
-replaceWithLoaded dest loadingDests =
-    case loadingDests of
-        (Loading title) :: rest ->
-            if dest.title == title then
-                Loaded dest :: rest
-
-            else
-                Loading title :: replaceWithLoaded dest rest
-
-        first :: rest ->
-            first :: replaceWithLoaded dest rest
-
-        [] ->
-            []
-
-
-type alias Peer =
-    { uuid : Int, username : String, lastDest : String, time : Int, path : List String, isHost : Bool, finished : Bool, currentTitle : String }
-
-
-emptyPeer : Peer
-emptyPeer =
-    { uuid = 0, username = "", lastDest = "", time = 0, path = [], isHost = False, finished = False, currentTitle = "" }
-
-
-type alias Options =
-    { uuid : Int, username : String, numDestinations : Int, seedStr : String, isHost : Bool, peerId : String, joinId : String }
-
-
-changeUsername options string =
-    ChangeOptions { options | username = string }
-
-
-changeNumDestinations options num =
-    ChangeOptions { options | numDestinations = Maybe.withDefault 3 <| String.toInt num }
-
-
-changeSeed options seedStr =
-    ChangeOptions { options | seedStr = seedStr }
-
-
-changeJoinId options id =
-    ChangeOptions { options | joinId = id }
-
-
-type alias WikiLadder =
-    List Destination
-
-
-type Msg
-    = GotPage String (Result Http.Error Destination) -- title, content node of that page
-    | GotDescription String (Result Http.Error Destination) -- short description and image for a page
-    | ClickedLink String -- link title
-    | ClickedJoinOrHost { isHost : Bool }
-    | Refresh
-    | StartGame
-    | GiveUp
-    | ChangeOptions Options
-    | ChangeOptsWhileInPreview { seed : String, numDests : Int }
-    | GoBack
-    | Tick Time.Posix
-    | PeerMsg PeerPort.PeersMsg
-    | GotUUID Int
-    | ClickedNewGame
-    | ToggleReviewPlayer Int --uuid of player to highlight in Review window
-    | NoOp
-
-
-type Window
-    = InPage Destination
-    | Fetching String
-    | PreGame
-    | Preview
-    | Review (List Int) --uuids of players to compare
+type Model
+    -- user is at the welcome screen, choosing username or typing in joinId
+    = Welcome WelcomeOpts
+    -- user is in the pregame lobby waiting for host to start
+    -- host can reroll for new destinations or change the number of destinations
+    | Lobby Lobby LobbyOpts
+    -- user is currently in game and viewing a wikipedia article
+    | InGame (Either Title Page) InProgressGame
+        { startTime : Time.Posix
+        , currentTime : Time.Posix
+        }
+        WikiGraphState
+    | PostGameReview InProgressGame WikiGraphState
     | Bad String
 
+{-| types of messages sent to other players P2P
+-}
+type PeerMsg
+    -- send lobby info when making changes to the lobby, or to joining players
+    = LobbyInfoMessage
+        { players : PlayerList InLobbyAttributes
+        , destinations : List PagePreview
+        }
+    -- send gamestate info to players to start the game
+    | GameStateMessage
+        { players : PlayerList InGameAttributes
+        , destinations : List PagePreview
+        }
+    | PlayerReachedTitle PeerId Title Int   -- uuid, wikipage title, time in milliseconds it took to reach
+    | PeerConnected PeerId String       -- uuid, username
+    | PeerDisconnected PeerId           -- uuid
+    | HostLost      -- connection to host lost
+    | Error String  -- error with peerJS
 
-type alias GameState =
-    { path : WikiLadder, remainingDests : WikiLadder, pastDests : WikiLadder, time : Int }
-
-
-type alias Model =
-    { window : Window
-    , gameState : GameState
-    , dests : WikiLadder
-    , loadingDests : List LoadingDestination
-    , options : Options
-    , peers : Dict Int Peer
-    , seedChange : String
-    , numDestsChange : Int
-    , gameStarted : Bool
-    }
+type Msg
+    = LoadedPage Title (Result String Page) Time.Posix -- requested title, content node of that page
+    | LoadedDestinationPreview Title (Result String PagePreview)
+    | LoadedWelcomePreview (Result String PagePreview)
+    | ClickedLink Title
+    | ClickedJoinGame
+    | ClickedHostGame
+    | ClickedStartGame
+    | ClickedNewGame
+    | RefreshLobby
+    | ReadyToStartGame Time.Posix
+    | GiveUp
+    | OnInputWelcomeParams { name : String, joinId : String }
+    | OnInputLobbyParams { numDestinations : Int }
+    | Tick Time.Posix
+    | UpdatedWikiGraph WikiGraphState
+    | PeerMsg PeerMsg
+    | NoOp
+    | CopyToClipboard String

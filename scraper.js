@@ -3,54 +3,58 @@ const fs = require('fs')
 const fetch = require('node-fetch')
 const Trie = require('./Trie.js')
 
-// const seed_pages = [
-// 	"History",
-// 	"Science",
-//	"Technology",
-// 	"Philosophy",
-// 	"Literature",
-// 	"Earth",
-// 	"Universe"
-// ]
-
-// const seed_pages = [
-// 	"Animal",
-// 	"Plant",
-// 	"Cooking",
-// 	"Civilization"
-// ]
 
 const seed_pages = [
+	"Wildlife",
+	"History of science",
+	"History of technology",
+	"History of medicine",
+	"History of film",
+	"History of writing",
+	"History of biology",
+	"History of communication",
+	"History of computing",
+	"History of theatre",
+	"History of art",
+	"Literature",
+	"Natural history",
 	"Manufacturing",
-	"Animal",
-	"Plant",
-	"Cooking"
+	"Cooking",
+	"Cuisine",
+	"Fantasy",
+	"Science fiction",
+	"Horror fiction",
+	"World Wide Web",
+	"Folklore",
+	"Internet meme",
+	"Human behavior",
+	"Mass media",
+	"Ecosystem",
+	"Economy",
+	"Modern Era",
+	"History of Earth",
+	"Human history"
 ]
 
-const poolFile = "accepteditems.txt"
-const queueFile = "randomitems.txt"
+const poolFile = "accepted.txt"
 
 const minViewsPer30Days = 5000
-const goalNumTitles = 5000
+const goalNumTitles = 30000
 
 let title_queue = []			// titles we haven't inspected yet
 let backlog = []					// titles we've considered but haven't expanded yet
 let accepted_titles = []	// titles that were deemed sufficient
 let titlesAccepted = 0		// number of accepted titles found so far
 let titlesSeen = 0				// number of total titles touched
-let visitedTitles = new Trie() // Trie to ensure we don't insert any titles already pushed to the queue
+let visitedTitles = new Trie() // Trie to ensure we don't look at any titles already pushed to the queue
 seed_pages.forEach(s => visitedTitles.insert(s))
 
 
 function checkpoint() {
  console.log("writing out", accepted_titles.length, "accepted titles")
  if (accepted_titles.length > 0)
-   fs.appendFileSync(poolFile, accepted_titles.join('\n')+'\n', 'utf8')
+   fs.appendFileSync(poolFile, accepted_titles.map(t => t + '\n').join(''), 'utf8')
  accepted_titles = []
-
- console.log(title_queue.length, "titles in queue")
- if (title_queue.length > 0)
-   fs.writeFileSync(queueFile, title_queue.join('\n')+'\n', 'utf8')
 
  console.log("checkpoint")
 }
@@ -94,7 +98,6 @@ function collectLinksOn(title) {
 	 		return json.parse.links
 				.filter(l => l.ns == 0 && l.exists != undefined)
 				.map(l => l['*'])
-				.filter(interesting)
 		})
 }
 
@@ -122,25 +125,39 @@ function sleep(sec) {
 }
 
 let delay = 5 // seconds
-const increaseDelay = () => delay = Math.min(Math.max(delay,1)*2,30)
-const decreaseDelay = () => delay = Math.max(delay-1,1)
+const minDelay = 0.5
+const maxDelay = 30
+const increaseDelay = () => delay = Math.min(Math.max(delay,minDelay)*3,maxDelay)
+const decreaseDelay = () => delay = Math.max(delay-1,minDelay)
 
-
+// pop titles off the queue, check if they're popular
+// send them to the backlog
 async function chooseFromQueue() {
-	if (title_queue.length == 0 || titlesAccepted >= goalNumTitles) return
+	if (titlesAccepted >= goalNumTitles) return
+
+	if (title_queue.length == 0) {
+		if (backlog.length > 0)
+		// fetch more titles by requesting the links on pages we've seen
+			await expand(backlog.splice(0,5))
+		else return
+	}
 
 	const batch = title_queue.slice(0,5)
 	console.log("testing popularity of", batch)
 	try {
-		const goodTitles = (await filterPopular(batch)).filter(interesting)
-		console.log("accepted titles", ...goodTitles)
-		goodTitles.forEach(t => accepted_titles.push(t))
-		titlesAccepted += goodTitles.length
+		const popularTitles = (await filterPopular(batch))
+		const interestingTitles = popularTitles.filter(interesting)
+		console.log("accepted titles", interestingTitles)
+		interestingTitles.forEach(t => accepted_titles.push(t))
+		titlesAccepted += interestingTitles.length
+
 		batch.forEach(_ => title_queue.shift())		// remove the titles from the queue
-		goodTitles.forEach(t => backlog.push(t))	// add interesting titles to the backlog of titles we'll expand on (inspect its links)
+		popularTitles.forEach(t => {
+			backlog.push(t) // add popular titles to the backlog of titles we'll expand on (inspect its links)
+			visitedTitles.insert(t)
+		})
+
 		decreaseDelay()
-		// fetch more titles by requesting the links on pages we've seen
-		if (title_queue.length < goalNumTitles) await expand(backlog.splice(0,5))
 	} catch (err) {
 		console.error(err)
 		increaseDelay()
@@ -155,7 +172,7 @@ async function chooseFromQueue() {
 // add the links found on the given titles to the queue
 async function expand(titles, newLinks=[]) {
 	if (titles.length == 0) {
-		// shuffle the title queue
+		// shuffle the newly found links
 		newLinks.sort(() => Math.random() - 0.5)
 			.forEach(l => title_queue.push(l))
 		return
@@ -188,4 +205,4 @@ async function expand(titles, newLinks=[]) {
 
 expand(seed_pages).then(_ => chooseFromQueue())
 
-//module.exports = {interesting}
+//module.exports = {interesting, filterPopular, collectLinksOn}

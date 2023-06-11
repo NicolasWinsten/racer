@@ -5,19 +5,37 @@
     <title>P2P WikiGame | Nicolas Winsten</title>
     <meta name="description" content="Race your friends through wikipedia to discover the degrees of separation between wildly disparate topics">
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <!--
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+
+    -->
+
+    <!-- Here is the basic styling for wikipedia pages -->
+    <style>
+        .mw-parser-output{color:#222;padding:0 8px} .mw-parser-output p{font-size:14px} .mw-parser-output h2,   .mw-parser-output h3,   .mw-parser-output h4{border-bottom:1px solid rgb(132, 135, 114);font-family:'Linux Libertine',Georgia,Times,serif}  .mw-parser-output h2{font-size:22px}  .mw-parser-output h3{font-size:18px;font-weight:700;font-family:sans-serif;border:none}  .mw-parser-output h4{font-size:14px;font-weight:700;font-family:'Linux Libertine',Georgia,Times,sans-serif;border:none}  .mw-parser-output .hatnote{color:#555;font-size:.8em;font-style:italic;margin:8px 0}  .mw-parser-output .thumb.mw-default-size,   .mw-parser-output .thumb.mw-halign-right,   .mw-parser-output .thumb.tright,   .mw-parser-output figure.mw-default-size,   .mw-parser-output figure.mw-halign-right,   .mw-parser-output figure.tright{float:right;clear:right;margin-left:1.4em}  .mw-parser-output .thumb.mw-default-size,   .mw-parser-output .thumb.mw-halign-left,   .mw-parser-output .thumb.tleft,   .mw-parser-output figure.mw-default-size,   .mw-parser-output figure.mw-halign-left,   .mw-parser-output figure.tleft{float:left;clear:left;margin-right:1.4em}  .mw-parser-output .thumb .thumbinner,   .mw-parser-output figure .thumbinner{color:#222;width:220px;margin:0 auto;border:1px solid #c8ccd1;padding:8px 0;background-color:#f8f9fa;font-size:94%;text-align:center;overflow:hidden}  .mw-parser-output .thumb{margin:.6em 0}  .mw-parser-output .thumbcaption{width:auto!important;margin:.5em 0 0;font-size:.8em;line-height:1.5;padding:0!important;color:#54595d}  .mw-parser-output .toc{display:table;zoom:1;padding:5px;border:1px solid #a2a9b1;background-color:#f8f9fa;font-size:95%}  .mw-parser-output .toc h2{border:none;padding:8px;font-size:16px;font-weight:700;font-family:sans-serif}  .mw-parser-output .toc .tocnumber{color:#222}  .mw-parser-output table.wikitable{text-align:left;background-color:#f8f9fa;color:#222;margin:1em 0;border:1px solid #a2a9b1;border-collapse:collapse}  .mw-parser-output table.wikitable tbody{display:table-row-group;vertical-align:middle;border-color:inherit}  .mw-parser-output table.wikitable tr{display:table-row;vertical-align:inherit;border-color:inherit}  .mw-parser-output table.wikitable td{text-align:center;border:1px solid #a2a9b1;padding:.2em .4em;display:table-cell;vertical-align:inherit}  .mw-parser-output table.infobox{font-size:88%;position:relative;border:1px solid #a2a9b1;background-color:#f8f9fa;display:flex;flex:1 1 100%;flex-flow:column nowrap;margin:.5em 0 1em 25px!important;max-width:340px;width:auto!important;float:right!important;clear:right!important;overflow:auto;overflow-y:hidden;overflow-x:auto;padding:0 20px}  .mw-parser-output table.infobox td{padding:.5em 0;vertical-align:top;text-align:center}  .mw-parser-output table.infobox th{text-align:left;font-weight:700;padding:.25em .33em .33em;line-height:1.2em;font-size:14px}  .mw-parser-output table.infobox .fn{font-size:140%;display:block;text-align:center;margin-top:10px}  .mw-parser-output table.infobox a.image img{height:auto}  .mw-parser-output table.infobox #Timeline-row{display:none}  .mw-parser-output table.vertical-navbox{display:table;border-collapse:separate;float:right;clear:right;max-width:320px;margin:0 0 1em 1em;background:#f9f9f9;border:1px solid #aaa;padding:.2em;border-spacing:.4em 0;text-align:center;line-height:1.4em;font-size:88%}  .mw-parser-output table.vertical-navbox .NavFrame{display:none}  .mw-parser-output table.vertical-navbox .NavToggle{display:none}  .mw-parser-output table.vertical-navbox .NavContent{display:none}  .mw-parser-output table.vertical-navbox .plainlinks{display:none}  .mw-parser-output table.navbox{box-sizing:border-box;border:1px solid #a2a9b1;width:100%;clear:both;font-size:88%;text-align:center;padding:1px;margin:1em auto 0;display:table;border-collapse:separate;border-spacing:2px}  .mw-parser-output table.navbox tbody{display:table-row-group;vertical-align:middle;border-color:inherit}  .mw-parser-output table.navbox tr{display:table-row;vertical-align:inherit;border-color:inherit}  .mw-parser-output table.navbox th{background:#ccf;font-weight:700}  .mw-parser-output table.navbox .plainlinks{display:none}  .mw-parser-output ul.gallery{margin:2px;padding:2px;display:block;zoom:1}  .mw-parser-output ul.gallery li.gallerybox{width:235px;vertical-align:top;display:inline-block;margin-bottom:.1em}  .mw-parser-output ul.gallery .thumb{width:230px;text-align:center;margin:2px;background-color:#f8f9fa;border:1px solid #c8ccd1;padding:10px}  .mw-parser-output ul.gallery .gallerytext{text-align:center;overflow:hidden;font-size:14px;padding:2px 4px;word-wrap:break-word}  .mw-parser-output .thumb .tmulti .tnone .thumbinner{clear:both;font-weight:700;border:1px solid #c8ccd1;padding:3px;background-color:#f8f9fa;font-size:94%;text-align:center;overflow:hidden}  .mw-parser-output .thumb .tmulti .tnone .tsingle{float:left;margin:1px;width:73px;max-width:73px}  .mw-parser-output .thumb .tsingle{float:left;margin:1px;width:73px;max-width:73px} /* .mw-parser-output .thumb .thumbimage{width:200px} */ .mw-parser-output .center{text-align:center}  .mw-parser-output #Container{display:none}  .mw-parser-output .sortkey{display:none}
+    </style>
+
     <link rel="stylesheet" href="styles/common.css">
-    <link rel="stylesheet" href="styles/Vector.css">
     <link rel="stylesheet" href="styles/commonPrint.css">
     <link rel="stylesheet" href="styles/shared.css">
     <link rel="stylesheet" href="styles/loaded.css">
+    
+    <!-- The styling is really annoying, so maybe try fetching the styled html from here: https://en.wikipedia.org/wiki/Spider?action=render
+        Using the returned HTML with the basic styling above seems to work best
+
+        TODO
+    -->
+
+    
+    
+
     <style>
         .wikilink {color: blue !important; text-decoration: underline !important}
         body {background-color: #ebece5 !important;}
-        .navbar {background-color: #d0d2c4;}
+        .navbar {background-color: rgb(208, 210, 196);}
         .previewImage img {width: 150px; height: auto;}
         .toast {max-width: 200px;}
-        a.hoverUnderline:hover {text-decoration: underline !important}
+        .hoverUnderline:hover {text-decoration: underline !important}
     </style>
 
 
@@ -26,188 +44,197 @@
 <body>
     <div id="app"></div>
     <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastbox"></div>
-    <div class="m-3" style="text-align: right; font-style: italic; font-size: smaller;"> -- <a class="wikilink" href="http://nicolaswinsten.com">Nicolas Winsten</a></div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+    <div class="m-3" style="text-align: right; font-style: italic; font-size: smaller;"> -- <a href="http://nicolaswinsten.com">Nicolas Winsten</a></div>
+    <!--
+           <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+ 
+    -->
+    
     <script src="assets/clipboard.min.js"></script>
     <script src="assets/peerjs.min.js"></script>
     <script src="racer.js"></script>
 
     <script>
-        const app = Elm.Main.init({node: document.getElementById("app")});
-
-        /*This app uses bootstrap tooltips but the popup elements are generated by the user, so we must activate them only once they have been created.
-        This port signals when to activate the tooltips; requestAnimationFrame is to make sure they've been added to the dom beforehand*/
-
-        app.ports.activateTooltipsSignal.subscribe(
-            function(x) {
-                requestAnimationFrame(function() {
-
-                    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-                    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                      return new bootstrap.Tooltip(tooltipTriggerEl)
-                    });
-
-                });
-            }
-        );
-
-        app.ports.activateClippySignal.subscribe(
-            function(x) {
-                requestAnimationFrame(function() {
-                    new ClipboardJS('.clippybtn');
-                });
-            }
-        );
-
-        app.ports.makeToast.subscribe(
-            function(msg) {
-                console.log("activating toast:", msg);
-
-                let temp = document.createElement('div');
-                temp.innerHTML = "<div class='toast border border-dark border-3' role='alert' aria-live='assertive' aria-atomic='true'><div class='toast-body'>" + msg + "</div></div>";
-
-                let el = temp.firstChild;
-                document.getElementById("toastbox").appendChild(el);
-
-                let toast = new bootstrap.Toast(el);
-                toast.show();
-
-                setTimeout(() => {
-                    toast.hide();
-                    setTimeout(() => {el.remove();}, 2000);
-                }, 15000);
-            }
-        );
-
-
-        /* code handling the Peer connections */
-
-        let peer = null;
+        const peer = constructPeer();
         let isHost = null;
         let hostConnection = null;
         let clientConnections = [];
 
-        let userAgentString = navigator.userAgent;
-//<!--        let chromeAgent = userAgentString.indexOf("Chrome") > -1;-->
-//<!--        let safariAgent = !chromeAgent && userAgentString.indexOf("Safari") > -1;-->
+        let app = null
+
+        peer.on('open', function(id) {
+                console.log("peer ID is " + id)
+                createApp(Date.now(), id)
+        });
+
+        peer.on('error', function(err) {
+            console.log("Your peer has error:", err);
+            if (app == null) {
+                createApp(Date.now(), null)
+            }
+                
+            app.ports.receiveDataPeerJS.send({error : err.type})
+        });
+
+
+        function createApp(seed, peerId) {
+            app = Elm.Main.init({
+                node : document.getElementById("app"),
+                flags : {seed : seed, peerId : peerId} 
+            })
+            setUpPorts()
+        }
+
+
+        /* code handling the Peer connections */
+
+        function constructPeer() {
+            console.log("creating P2P agent");
+
+            const peerOptions = {debug : 2, serialization : "json", port : 443, secure : true };
+            console.log("peer options:", peerOptions);
+            const peer = new Peer(null, peerOptions);
+
+            return peer
+        }
+
+        // close all connected peers
+        function clearClientConnections() {
+            clientConnections.forEach(c => c.close())
+            clientConnections = []
+        }
 
 
         window.addEventListener("beforeunload", function(e){
-           if (peer != null) { peer.destroy(); }
-
+           if (peer != null) peer.destroy()
         }, false);
-
-        function filterConns() {
-            console.log("filtering connections");
-            clientConnections = clientConnections.filter(function(conn) {
-                return conn.open;
-            });
-        }
-
-
-        function dataHandler(data) {
-            console.log("received data:", data);
-            app.ports.receiveData.send(data);
-        }
-
-
-        app.ports.makePeer.subscribe(
-            function(str) {
-                console.log("initializing peer: " + str);
-
-                if (peer != null) {
-                    peer.destroy();
+        
+        // handle data from a peer
+        function handleIncomingData(data, senderId) {
+            // if you're the host, either broadcast the message to everyone (including yourself)
+            // or pass it along to the correct recipient
+            // TODO maybe an all-to-all design would work better than host-to-clients
+            console.log("received data from peer:", data)
+            if (isHost) {
+                switch (data.type) {
+                    case "broadcast":
+                        clientConnections
+                            .filter(c => c.peer != senderId)
+                            .forEach(c => c.send(data.message))
+                        app.ports.receiveDataPeerJS.send(data.message)
+                        break
+                    case "directed":
+                        clientConnections
+                            .filter(c => c.peer == data.recipient)
+                            .forEach(c => c.send(data.message))
+                        break
+                    default:
+                        console.log("Error: as host, did not know how to handle incoming data:", data)
                 }
-                peerOptions = {debug : 3, serialization : "json", port : 443, secure : true };
-                console.log("peer options:", peerOptions);
-                peer = new Peer(null, peerOptions);
+            } else {
+                app.ports.receiveDataPeerJS.send(data)
+            }
+        }
 
-                peer.on('open', function(id) {
-                    console.log("peer ID is " + id);
-                    app.ports.receiveData.send({ id : id });
+        // handle data produced from the app, and send it out to peers
+        function handleOutgoingData(data) {
+            console.log("sending out data:", data)
+            if (isHost) {
+                switch (data.type) {
+                    case "broadcast":
+                        clientConnections.forEach(c => c.send(data.message))
+                        break
+                    case "directed":
+                        clientConnections
+                            .filter(c => c.peer == data.recipient)
+                            .forEach(c => c.send(data.message))
+                        break
+                    default:
+                        console.log("Error: as host, did not know how to handle outgoing data:", data)
+                }
+            } else {
+                hostConnection.send(data)
+            }
+        }
 
-                    peer.on('error', function(err) {
-                        console.log("Your peer has error:", err.type);
-                        app.ports.receiveData.send({error : err.type});
+        function setUpPorts() {
+
+            app.ports.copyToClipboard.subscribe(text => {
+                const type = "text/plain";
+                const blob = new Blob([text], { type });
+                const data = [new ClipboardItem({ [type]: blob })];
+
+                navigator.clipboard.write(data)
+            })
+
+
+            app.ports.makeToast.subscribe(
+                function(msg) {
+                    console.log(msg)
+                }
+            );
+
+            app.ports.sendData.subscribe(handleOutgoingData)
+
+
+            app.ports.connectToHostPort.subscribe(({host, name}) => {
+                console.log("attempting to connect to host at", host)
+                isHost = false
+                clearClientConnections()
+
+                hostConnection = peer.connect(host, {metadata : {name : name}})
+                hostConnection.on('open', () => {
+                    console.log("host connection opened")
+                    hostConnection.on('data', data => handleIncomingData(data, host));
+                    peer.disconnect();
+
+                    hostConnection.on('close', function() {
+                        console.log("connection from host lost");
+                        app.ports.receiveDataPeerJS.send("hostlost");
+                    });
+
+                    hostConnection.on('error', function(err) {
+                        console.log("connection error with host:", err);
+                        app.ports.receiveDataPeerJS.send({error: err});
+                    });
+                })
+            })
+
+            app.ports.host.subscribe(() => {
+                // start listening for peer connections
+                isHost = true
+                clearClientConnections()
+
+                peer.on('connection', function(conn) {
+                    console.log("connection received from " + conn.peer + " : " + conn.metadata.name);
+                    clientConnections.push(conn);
+
+                    // upon a new connection, signal the other peers about the new peer
+                    conn.on('open', function() {
+                        // broadcast the new peer connection to other peers
+                        const joinMessage = {type : "broadcast", message : {playerconnected : {name : conn.metadata.name, uuid : conn.peer}}}
+                        handleIncomingData(joinMessage, conn.peer)
+
+                        // when this peer sends data to us, send it through to the app and to the other peers
+                        conn.on('data', data => handleIncomingData(data, conn.peer));
+
+                        // when this peers connection closes, signal the other peers about it
+                        conn.on('close', function() {
+                            console.log("connection to", conn.metadata.name, ":", conn.peer, "was lost");
+                            clientConnections = clientConnections.filter(c => c.peer != conn.peer)
+                            const leaveMessage = {type : "broadcast", message : {playerlost : {uuid : conn.peer}}}
+                            handleIncomingData(leaveMessage, conn.peer)
+                        });
+
+                        conn.on('error', function(err) {
+                            console.log("connection error with", conn.metadata.name, conn.peer, ":", err);
+                            app.ports.receiveDataPeerJS.send({error: err});
+                        });
                     });
                 });
+            })
 
-            }
-        );
-
-
-        app.ports.initPeer.subscribe(
-            function(init) {
-
-                isHost = init.isHost;
-                console.log("isHost", isHost);
-
-                if (isHost) {
-                    console.log("hosting...");
-                    peer.on('connection', function(conn) {
-                        console.log("connection received from " + conn.peer + " : " + conn.metadata.username + " with uuid " + conn.metadata.uuid);
-                        clientConnections.push(conn);
-
-
-                        conn.on('open', function() {
-                            app.ports.receiveData.send({peerConnect : {username : conn.metadata.username, uuid : conn.metadata.uuid}});
-                            conn.on('data', dataHandler);
-
-                            conn.on('close', function() {
-                                filterConns();
-                                console.log("connection to", conn.metadata.username, ":", conn.metadata.uuid, "was lost");
-                                app.ports.receiveData.send({peerDisconnect : {uuid : conn.metadata.uuid}});
-                            });
-
-                            conn.on('error', function(err) {
-                                console.log("connection error with", conn.metadata.username, ":", err);
-                                app.ports.receiveData.send({error: err});
-                            });
-                        });
-
-
-
-                    });
-
-                } else {
-                    console.log("attempting connection to host " + init.connectId);
-
-                    hostConnection = peer.connect(init.connectId, {metadata : {username : init.username, uuid : init.uuid}});
-                    hostConnection.on('open', function() {
-                        hostConnection.on('data', dataHandler);
-                        peer.disconnect();
-
-                        hostConnection.on('close', function() {
-                            console.log("connection from host lost");
-                            app.ports.receiveData.send({hostLost : "Host connection was closed"});
-                            peer.destroy();
-                        });
-
-                        hostConnection.on('error', function(err) {
-                            console.log("connection error with host:", err);
-                            app.ports.receiveData.send({error: err});
-                        });
-                    });
-                }
-
-            }
-        );
-
-        app.ports.sendData.subscribe(
-            function(data) {
-                if (isHost) {
-                    console.log("trying to send data to clients:", data);
-                    clientConnections.forEach(function(conn) {
-                        conn.send(data);
-                    });
-                } else {
-                    console.log("trying to send to host:", data);
-                    hostConnection.send(data);
-                }
-            }
-        );
-
+        }
 
     </script>
 

@@ -174,17 +174,6 @@ table.listing td {
 	border-collapse: collapse;
 }
 
-a {
-	color: black !important;
-	background: none !important;
-	padding: 0 !important;
-}
-
-a:link, a:visited {
-	color: #520;
-	background: transparent;
-	text-decoration: underline;
-}
 
 #content a.external.text:after,
 #content a.external.autonumber:after {
@@ -211,23 +200,6 @@ a:link, a:visited {
 	margin: 0 !important;
 }
 
-/* MSIE/Win doesn't understand 'inherit' */
-a,
-a.external,
-a.new,
-a.stub {
-	color: black !important;
-	text-decoration: none !important;
-}
-
-/* Continue ... */
-a,
-a.external,
-a.new,
-a.stub {
-	color: inherit !important;
-	text-decoration: inherit !important;
-}
 
 img {
 	border: none;

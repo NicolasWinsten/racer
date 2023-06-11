@@ -2,46 +2,45 @@ port module Main exposing (main)
 
 import Browser
 import Browser.Dom
-import Dict exposing (Dict)
+import Dict
 import Helpers exposing (..)
 import Model exposing (..)
+import Types exposing (..)
 import PageFetch
 import PeerPort
 import Random
 import Task
 import Time
 import Views exposing (view)
+import Articles
+import Either exposing (Either(..))
+import Random.List
+import WikiGraph
 
-initCmd : Cmd Msg
-initCmd =
-    Cmd.batch [ Random.generate GotUUID <| Random.int 0 Random.maxInt, PeerPort.makePeer "" ]
-
-
-initialModel : Model
-initialModel =
-    let
-        gameState =
-            { path = [], remainingDests = [], pastDests = [], time = 0 }
-
-        options =
-            { uuid = 0, numDestinations = 4, username = "", seedStr = "", isHost = False, joinId = "", peerId = "" }
-    in
-    { window = PreGame, gameState = gameState, dests = [], loadingDests = [], options = options, peers = Dict.empty, seedChange = "", numDestsChange = 4, gameStarted = False }
-
-
-{-| call getPage when user clicks on a wikilink
+{-| retrieve the content of a wikipedia page along with the current time when it is loaded
 -}
-getPage : String -> Cmd Msg
-getPage title =
-    Cmd.map (GotPage title) <| PageFetch.getPage title
+getPage : Title -> Cmd Msg
+getPage title = PageFetch.getPage title
+    -- I want a timestamp even if the request fails
+    -- so I convert getPage from Task String Page to Task x (Result String Page)
+        -- |> Task.attempt (\r -> LoadedPage title r (Time.millisToPosix 0))
+    |> Task.map Ok
+    |> Task.onError (Err >> Task.succeed) -- 
+    |> Task.andThen (\page -> Task.map (LoadedPage title page) Time.now)
+    |> Task.perform identity
 
-
-{-| call getDescription when loading the destination pages in preview
+{-| retrieve summary of a wikipedia article (thumbnail, description)
+to be displayed in the game lobby (and sent to the other players if hosting)
 -}
-getDescription : String -> Cmd Msg
-getDescription title =
-    Cmd.map (GotDescription title) <| PageFetch.getPage title
+getPreview : Title -> Cmd Msg
+getPreview title = PageFetch.getPreview title
+    |> Task.attempt (LoadedDestinationPreview title)
 
+{-| load the preview of an example title at the welcome screen
+-}
+getWelcomePreview : Title -> Cmd Msg
+getWelcomePreview title = PageFetch.getPreview title
+    |> Task.attempt LoadedWelcomePreview
 
 {-| scroll back up to top of page
 -}
@@ -50,112 +49,101 @@ goBackToTop =
     Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0)
 
 
-port activateTooltipsSignal : String -> Cmd msg
-
-
-{-| activate bootstrap tooltips
--}
-activateTooltips =
-    activateTooltipsSignal "This is a dummy value"
-
-
 transition : Cmd Msg
 transition =
-    Cmd.batch [ activateTooltips, goBackToTop ]
+    Cmd.batch [ goBackToTop ]
 
 
 {-| create a bootstrap Toast with the given message
 -}
 port makeToast : String -> Cmd msg
 
-port activateClippySignal : String -> Cmd msg
-
-
-{-| activate the cute clipboard thing for copying the host id
+{-| copy the given string to the user's clipboard
 -}
-activateClippy =
-    activateClippySignal "This is a dummy value"
+port copyToClipboard : String -> Cmd msg
 
-
-{-| create the game preview and request the page descriptions, and signal peers with the seedInfo
+{-| create a message containing information about the lobby
+ (we send this to any players that want to join or if the lobby settings have changed)
 -}
-createGame : Model -> ( Model, Cmd Msg )
-createGame model =
+lobbyInfoMessage : Lobby -> PeerMsg
+lobbyInfoMessage {players, destinations, self, uuid} = LobbyInfoMessage
+    { players = Dict.map (\_ {name, color} -> {name=name, color=color}) players
+        |> Dict.insert (Maybe.withDefault "ERROR" uuid) self
+    , destinations = destinations
+    }
+
+{-| create a message containing the information of a game in progress.
+This is sent whenever a new game is started or to any late-joining players
+-}
+gameStateMessage : InProgressGame -> PeerMsg
+gameStateMessage {players, destinations, self, uuid} = GameStateMessage
+    { players = Dict.insert (Maybe.withDefault "ERROR" uuid) self players
+    , destinations = destinations
+    }
+
+{-| update your game info with the host's game info
+(update the player list and destination list)
+Will return Nothing if the new info doesn't mention you
+-}
+updateGameInfo myInfo newInfo =
+    case Maybe.andThen (\id -> Dict.get id newInfo.players) myInfo.uuid of
+        Just self -> Just <|
+            { uuid=myInfo.uuid
+            , seed=myInfo.seed
+            , destinations=newInfo.destinations
+            -- remove yourself from the host's player list ss
+            , players=Maybe.map (\id -> Dict.remove id newInfo.players) myInfo.uuid
+                |> Maybe.withDefault newInfo.players
+            , numDestinations=List.length newInfo.destinations
+            , amHost=False
+            , self=self
+            }
+        Nothing -> Nothing
+
+{-| convert lobby information to game information to start the game
+
+each player needs to be annotated with their progress
+-}
+lobbyToGameState : Lobby -> Maybe InProgressGame
+lobbyToGameState lobby = case initialGameState (List.map .title lobby.destinations) of
+    Just gameState ->
+        let
+            mkPlayer {name, color} = {name=name, color=color, gameState=gameState, connected=True}
+
+            newGameInfo =
+                { uuid=lobby.uuid
+                , seed=lobby.seed
+                , destinations=lobby.destinations
+                , numDestinations=lobby.numDestinations
+                , amHost=lobby.amHost
+                , players=Dict.map (\id player -> mkPlayer player) lobby.players
+                , self=mkPlayer lobby.self
+                }
+        in Just newGameInfo
+    Nothing -> Nothing
+
+{-| transition to the gameplay by loading the start page
+
+signal peers that game has started (if hosting)
+-}
+startGame : InProgressGame -> Time.Posix -> ( Model, Cmd Msg )
+startGame game time =
     let
-        numDestsChosen =
-            model.options.numDestinations
+        -- notify connected players to begin the game (if you're the host)
+        startGameSignal = cmdIf game.amHost
+            <| PeerPort.broadcast (gameStateMessage game)
 
-        seedStrChosen =
-            model.options.seedStr
-
-        ( titles, _ ) =
-            getDestinations numDestsChosen <| strToSeed seedStrChosen
-
-        -- create empty page placeholders while we load their descriptions/pictures
-        loadingDests =
-            List.map Loading titles
-
-        signalPeers = cmdIf model.options.isHost
-            <| PeerPort.sendSeedInfo numDestsChosen seedStrChosen
-
-        toast =
-            makeToast <| "game seed is: " ++ seedStrChosen
+        start = game.self.gameState.currentLeg.currentPage
+        -- fetch the page you're supposed to be on
+        startPageRequest = getPage start
     in
-    ( { model | window = Preview, dests = [], loadingDests = loadingDests, seedChange = seedStrChosen, numDestsChange = numDestsChosen }
-    , Cmd.batch <| activateTooltips :: activateClippy :: goBackToTop :: signalPeers :: toast :: List.map getDescription titles
+    ( InGame (Left start) game
+        { startTime=time
+        , currentTime=time
+        }
+        (WikiGraph.init game.destinations)
+    , Cmd.batch [ transition, startGameSignal, makeToast "Host started the game", startPageRequest ]
     )
-
-
-{-| transition to the gameplay and signal peers that game has started (if hosting)
--}
-startGame : Model -> ( Model, Cmd Msg )
-startGame model =
-    case model.dests of
-        start :: destinations ->
-            let
-                gameState =
-                    { path = [ start ], remainingDests = destinations, pastDests = [ start ], time = 0 }
-
-                startGameSignal = cmdIf model.options.isHost
-                    <| PeerPort.signalGameStarted (model.options.username ++ " started the game")
-
-                startReachSignal =
-                    PeerPort.signalTitleReach model.options.uuid start.title
-            in
-            ( { model | window = InPage start, gameState = gameState, gameStarted = True }, Cmd.batch [ transition, startGameSignal, startReachSignal ] )
-
-        [] ->
-            ( { model | window = Bad "Can't start game with 0 destinations" }, Cmd.none )
-
-
-{-| reset the game back to Game Preview and signal peers to do the same
--}
-reset : Model -> ( Model, Cmd Msg )
-reset model =
-    let
-        newGameState =
-            { path = [], pastDests = [], remainingDests = [], time = 0 }
-
-        signalPeers = cmdIf model.options.isHost
-            <| PeerPort.signalNewGame (model.options.username ++ " wants a new game")
-
-        newPeerDict =
-            let
-                resetPeer peer =
-                    { emptyPeer | username = peer.username, uuid = peer.uuid, isHost = peer.isHost }
-            in
-            Dict.map (\_ p -> resetPeer p) model.peers
-
-        resetModel =
-            { model | window = Preview, gameState = newGameState, gameStarted = False, dests = [], loadingDests = [], seedChange = "", peers = newPeerDict }
-
-        ( newModel, cmd ) =
-            createGame resetModel
-    in
-    ( newModel
-    , Cmd.batch [ cmd, signalPeers ]
-    )
-
 
 
 {- *scarface voice* say hello to my enormous update function -}
@@ -164,429 +152,399 @@ reset model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        ChangeOptions options ->
-            ( { model | options = options }, Cmd.none )
+        -- changing inputs on the welcome screen
+        OnInputWelcomeParams {name, joinId} -> case model of
+            Welcome options -> (Welcome {options | inputJoinId=joinId, inputName=name}, Cmd.none)
+            _ -> (Bad "ERROR: Changing username/joinId outside of Welcome page", Cmd.none)
 
-        ChangeOptsWhileInPreview opts ->
-            ( { model | seedChange = opts.seed, numDestsChange = opts.numDests }, Cmd.none )
+        -- host is changing the number of destinations in the lobby
+        OnInputLobbyParams {numDestinations} -> case model of
+            Lobby lobby opts -> ( Lobby lobby {opts | numDestinationsInput=numDestinations}, Cmd.none )
+            _ -> (Bad "ERROR: Changing game parameters while not in lobby", Cmd.none)
 
-        StartGame ->
-            startGame model
+        -- host clicked start game, get the current time and transition to gameplay
+        ClickedStartGame -> (model, Task.perform ReadyToStartGame Time.now)
 
-        GotDescription _ (Ok page) ->
-            let
-                newLoadingDests =
-                    replaceWithLoaded page model.loadingDests
+        -- transition to gameplay if destinations are done loading
+        ReadyToStartGame time -> case model of
+            Lobby lobby _ -> -- host will be in lobby when clicking Start Game
+                if List.length lobby.destinations == lobby.numDestinations then
+                    case lobbyToGameState lobby of
+                        Just newGame -> startGame newGame time
+                        Nothing -> (Bad "Cannot start game with less than 2 destinations", Cmd.none)
+                else (model, makeToast "Destinations not done loading")
 
-                allDestsLoaded =
-                    doneLoading newLoadingDests
+            InGame _ game _ _ ->
+                -- after the other players have received the GameState message from the host
+                -- they will be InGame
+                startGame game time
 
-                newDests =
-                    if allDestsLoaded then
-                        extractLoadedDestinations newLoadingDests
+            _ -> (Bad "Cannot start a game outside of the lobby", Cmd.none)
 
-                    else
-                        model.dests
+        -- host loaded a page preview for one of the destinations
+        LoadedDestinationPreview _ (Ok page) -> case model of
+            Lobby lobby options -> -- loaded one of the destination pages
+                -- this msg should only be received by the host user
+                let
+                    -- shuffle the destination list so the order isn't based on API response time
+                    (destinationList, newSeed) = lobby.seed
+                        |> Random.step (Random.List.shuffle (page :: lobby.destinations))
 
-                newModel =
-                    { model | dests = newDests, loadingDests = newLoadingDests }
-            in
-            if model.gameStarted && allDestsLoaded then
-                startGame newModel
+                    newLobby = {lobby | destinations=destinationList, seed=newSeed}
+                    -- if all the pages are loaded, then send them to the other players (if host)
+                    doneLoading = List.length destinationList == lobby.numDestinations
+                    cmd = cmdIf (lobby.amHost && doneLoading)
+                        <| PeerPort.broadcast (lobbyInfoMessage newLobby)
 
-            else
-                ( newModel, Cmd.none )
+                in ( Lobby newLobby options, cmd )
+            _ -> ( Bad "Cannot load page preview outside of lobby", Cmd.none )
 
-        GotDescription title (Err _) ->
-            ( { model | window = Bad <| "Ran into issue getting description for " ++ title }, Cmd.none )
+        LoadedDestinationPreview title (Err err) ->
+            ( Bad <| "Request for destination title " ++ title ++ " failed: " ++ err, Cmd.none )
+        
+        LoadedWelcomePreview pageResult -> case pageResult of
+            Ok page -> case model of
+                Welcome ({displayPages} as opts) ->
+                    let (left,right) = displayPages
+                    -- only update the welcome display if the loaded page has a thumbnail to display
+                    in case page.thumbnail of
+                        Just _ -> (Welcome {opts | displayPages=(Just page,left)}, Cmd.none)
+                        Nothing -> (model, Cmd.none)
+                _ -> (model, Cmd.none)
+            Err err ->
+                (model, makeToast err)
 
-        GotPage _ (Ok page) ->
-            let
-                newPath =
-                    page :: model.gameState.path
 
-                state =
-                    model.gameState
+        -- loaded page after clicking a link in game
+        -- update the game state, signal peers about reaching the new title
+        LoadedPage _ (Ok page) time -> case model of
+            InGame _ game opts wikigraph ->
+                let
+                    self = game.self
 
-                signalTitleReached =
-                    PeerPort.signalTitleReach model.options.uuid page.title
-
-                signalGameFinished =
-                    PeerPort.signalGameFinish model.options.uuid (List.map .title newPath) state.time
-            in
-            case state.remainingDests of
-                dest :: restOfDests ->
-                    let
-                        isPathCompleted =
-                            page.title == dest.title && List.isEmpty restOfDests
-
-                        newGameState =
-                            if page.title == dest.title then
-                                { state | path = newPath, remainingDests = restOfDests, pastDests = dest :: state.pastDests }
-
-                            else
-                                { state | path = newPath }
-                    in
-                    if isPathCompleted then
-                        ( { model | window = Review [ model.options.uuid ], gameState = newGameState }, Cmd.batch [ signalGameFinished, signalTitleReached, transition ] )
-
-                    else
-                        ( { model | window = InPage page, gameState = newGameState }, Cmd.batch [ signalTitleReached, transition ] )
-
-                [] ->
-                    ( { model | window = Bad "Why are we out of destinations?" }, Cmd.none )
-
-        GotPage title (Err _) ->
-            ( { model | window = Bad <| "Http error while fetching " ++ title }, Cmd.none )
-
-        ClickedLink title ->
-            ( { model | window = Fetching title }, getPage title )
-
-        GoBack ->
-            let
-                state =
-                    model.gameState
-            in
-            case state.path of
-                currentPage :: prevPage :: rest ->
-                    if List.head state.path == List.head state.pastDests then
-                        let
-                            newState =
-                                { state | path = prevPage :: rest, pastDests = popBy .title currentPage state.pastDests, remainingDests = currentPage :: state.remainingDests }
+                    newGameState =
+                        let newState = updateGameState page.title self.gameState 
                         in
-                        ( { model | window = InPage prevPage, gameState = newState }, transition )
+                        if isGameFinished newState then { newState | finishTime=Just gameTime}
+                        else newState
+                    -- time since game start
+                    gameTime = Time.posixToMillis time - Time.posixToMillis opts.startTime
 
-                    else
-                        ( { model | window = InPage prevPage, gameState = { state | path = prevPage :: rest } }, transition )
+                    signalTitleReached = case game.uuid of
+                        Just uuid -> PeerPort.broadcast
+                            <| PlayerReachedTitle uuid page.title gameTime
+                        Nothing -> Cmd.none
+                    
+                    cmd = Cmd.batch [signalTitleReached, goBackToTop]
 
-                _ ->
-                    ( model, Cmd.none )
+                    newWikiGraph = WikiGraph.update (Maybe.withDefault "" game.uuid) newGameState wikigraph
+                in
+                if isGameFinished newGameState then
+                    ( PostGameReview { game | self={ self | gameState=newGameState } } newWikiGraph
+                    , cmd
+                    )
+                else
+                    ( InGame (Right page)
+                        { game | self={ self | gameState=newGameState} }
+                        { opts | currentTime=time }
+                        newWikiGraph
+                    , cmd )
+            _ -> (model, makeToast <| "loaded page " ++ page.title)
 
-        Tick _ ->
-            let
-                state =
-                    model.gameState
+        LoadedPage title (Err err) _ -> ( Bad <| "Request for title " ++ title ++ " failed: " ++ err, Cmd.none )
 
-                newState =
-                    { state | time = state.time + 10 }
-            in
-            ( { model | gameState = newState }, Cmd.none )
+        ClickedLink title -> case model of
+            InGame _ game opts wikigraph -> (InGame (Left title) game opts wikigraph, getPage title)
+            -- maybe allow this message while in the post game to signal clicking a wikigraph node
+            _ -> (Bad <| "How did you click a wikilink while not on a wikipage?", Cmd.none)
+
+        Tick time -> case model of
+            Welcome opts ->
+                let (newTitle, newSeed) = Articles.generateTitleList 1 opts.seed
+                    fetchExamplePage = Maybe.map getWelcomePreview (List.head newTitle)
+                        |> Maybe.withDefault Cmd.none 
+                in (Welcome {opts | seed=newSeed}, fetchExamplePage)
+            InGame page game opts wikigraph -> (InGame page game { opts | currentTime=time } wikigraph, Cmd.none)
+            _ -> (Bad "We shouldn't be ticking outside of gameplay", Cmd.none)
 
         NoOp ->
             ( model, Cmd.none )
 
-        Refresh ->
-            {- if model.seedChange == model.options.seedStr then
-                   ( model, Cmd.none )
-
-               else
-            -}
-            let
-                options =
-                    model.options
-
-                newModel =
-                    { model | options = { options | seedStr = model.seedChange, numDestinations = model.numDestsChange } }
-            in
-            createGame newModel
-
-        ClickedJoinOrHost flag ->
-            if String.isEmpty model.options.username then
-                ( model, makeToast "You must give a username!" )
-
-            else if not flag.isHost && String.isEmpty model.options.joinId then
-                ( model, makeToast "You have to provide the host's game ID to join their game" )
-
-            else
+        RefreshLobby -> case model of
+            Lobby lobby opts ->
                 let
-                    ( previewModel, makeGameCmd ) =
-                        createGame model
+                    chosenNum = opts.numDestinationsInput
+                    
+                    (destinationTitles, newSeed) = Articles.generateTitleList chosenNum lobby.seed
 
-                    peerUninitialized =
-                        String.isEmpty model.options.peerId
-
-                    initPeerCmd =
-                        PeerPort.initPeer { isHost = flag.isHost, username = model.options.username, connectId = model.options.joinId, uuid = model.options.uuid }
-
-                    noFriendsToast =
-                        makeToast "Your socket connection hasn't been initialized. Try refreshing if you'd like to play with friends."
-
-                    cmd =
-                        if flag.isHost && peerUninitialized then
-                            Cmd.batch [ makeGameCmd, noFriendsToast, initPeerCmd ]
-
-                        else if flag.isHost then
-                            Cmd.batch [ makeGameCmd, initPeerCmd ]
-
-                        else
-                            Cmd.batch [ initPeerCmd, makeToast "attempting to join game..." ]
-
-                    newOptions =
-                        let
-                            options =
-                                model.options
-                        in
-                        { options | isHost = flag.isHost }
+                    fetchDestinationPreviews = Cmd.batch <| List.map getPreview destinationTitles
                 in
-                if flag.isHost then
-                    ( { previewModel | options = { newOptions | joinId = "" } }, cmd )
+                ( Lobby {lobby | seed=newSeed, numDestinations=chosenNum, destinations=[]} opts
+                , fetchDestinationPreviews
+                )
+            _ -> ( Bad "Cannot refresh lobby while not in lobby", Cmd.none )
 
-                else
-                    ( { model | options = newOptions }, cmd )
-
-        PeerMsg (PeerPort.IdGenerated id) ->
-            let
-                options =
-                    model.options
-            in
-            ( { model | options = { options | peerId = id } }, Cmd.none )
-
-        PeerMsg (PeerPort.SeedInfo num seed) ->
-            if model.options.isHost then
-                ( { model | window = Bad "Host shouldnt be receiving seedinfo" }, Cmd.none )
-
-            else
-                let
-                    options =
-                        model.options
-                in
-                createGame { model | options = { options | numDestinations = num, seedStr = seed } }
-
-        PeerMsg (PeerPort.GameStart startMsg) ->
-            if model.options.isHost then
-                ( { model | window = Bad "Host shouldnt be receiving game start message" }, Cmd.none )
-
-            else
-                let
-                    toast =
-                        case String.trim startMsg of
-                            "" ->
-                                Cmd.none
-
-                            s ->
-                                makeToast s
-
-                    allDestsLoaded =
-                        doneLoading model.loadingDests
-
-                    ( newModel, cmd ) =
-                        startGame model
-                in
-                if allDestsLoaded then
-                    ( newModel, Cmd.batch [ cmd, toast ] )
-
-                else
-                    ( { model | gameStarted = True }, toast )
-
-        PeerMsg (PeerPort.TitleReach uuid title) ->
-            case Dict.get uuid model.peers of
-                Just peer ->
-                    let
-                        updatedPeer =
-                            let
-                                newLastDest =
-                                    if List.member title <| List.map .title model.dests then
-                                        title
-
-                                    else
-                                        peer.lastDest
-                            in
-                            { peer | lastDest = newLastDest, currentTitle = title }
-
-                        hostEcho = cmdIf model.options.isHost
-                            <| PeerPort.signalTitleReach uuid title
-
-                        toast = cmdIf (List.member title (List.map .title model.dests))
-                            <| makeToast (peer.username ++ " found " ++ title)
+        ClickedJoinGame -> case model of
+            Welcome {inputJoinId, inputName} ->
+                if inputName == "" then (model, makeToast "You must give username!")
+                else if inputJoinId == "" then (model, makeToast "You have to provide the host's game ID to join their game")
+                else (model, Cmd.batch [makeToast "Attempting to join game...", PeerPort.connectToHost {hostId=inputJoinId, name=inputName}])
+            _ -> ( Bad "How did you click to join game while not in the welcome screen?", Cmd.none)
         
+        ClickedHostGame -> case model of
+            Welcome {inputName, uuid, seed} ->
+                if inputName == "" then (model, makeToast "You must give username!")
+                else
+                    let
+                        (newLobby, cmds) = update RefreshLobby <|
+                            Lobby
+                                { players=Dict.empty
+                                , destinations=[]
+                                , numDestinations=4
+                                , self={name=inputName, color=generateColorForNewPlayer [] seed}
+                                , uuid=uuid
+                                , seed=seed
+                                , amHost=True
+                                }
+                                { numDestinationsInput=4 }
                     in
-                    ( { model | peers = Dict.insert uuid updatedPeer model.peers }, Cmd.batch [ hostEcho, toast ] )
+                    ( newLobby, Cmd.batch [cmds, makeToast "Attempting to host game...", PeerPort.hostGame])
+            _ -> ( Bad "How did you click to join game while not in the welcome screen?", Cmd.none)
 
-                Nothing ->
-                    ( model, Cmd.none )
+        -- some player reached a page in so many milliseconds
+        -- update game state, update wikigraph (set new page as the player's current node)
+        PeerMsg (PlayerReachedTitle uuid title time) ->
+            let
+                -- take the player's gamestate, update it with the new title
 
-        PeerMsg (PeerPort.PeerConnect peerUsername peerUUID) ->
-            -- ignore the host echoing back that you've joined
-            if peerUUID == model.options.uuid then
-                ( model, Cmd.none )
-
-            else
-                let
-                    newPeer =
-                        { emptyPeer | username = peerUsername, uuid = peerUUID }
-
-                    newPeerDict =
-                        Dict.insert peerUUID newPeer model.peers
-
-                    hostEcho = cmdIf model.options.isHost
-                        -- echo back to all peers that new person joined
-                        <| PeerPort.signalPeerConnected peerUsername peerUUID
-
-                    peerList =
-                        List.map (\peer -> { username = peer.username, uuid = peer.uuid, isHost = False, finished = peer.finished, lastDest = peer.lastDest }) <| Dict.values model.peers
-
-                    peerListWithHost =
-                        let
-                            finished =
-                                case model.window of
-                                    Review _ ->
-                                        True
-
-                                    _ ->
-                                        False
-
-                            lastDest =
-                                List.head model.gameState.pastDests |> Maybe.map .title |> Maybe.withDefault ""
+                -- updatePlayerList = Dict.update uuid
+                --     (Maybe.map (\player -> {player | gameState=newGameState player.gameState}))
+                
+                -- update the player state with the new title and update the wikigraph
+                updateGame game wikigraph = case Dict.get uuid game.players of
+                    Just player ->
+                        let newPlayerState =
+                                let g = updateGameState title player.gameState
+                                    finished = isGameFinished g
+                                in { g | finishTime=if finished then Just time else Nothing }
+                            newWikiGraph = WikiGraph.update uuid newPlayerState wikigraph
                         in
-                        { username = model.options.username, uuid = model.options.uuid, isHost = True, finished = finished, lastDest = lastDest } :: peerList
-
-                    hostSendGameInfo = cmdIf model.options.isHost
-                        -- echo message containing the game info tagged with the new peer's uuid
-                        <| PeerPort.sendGameInfo peerUUID { seed = model.options.seedStr, numDestinations = model.options.numDestinations, peers = peerListWithHost, started = model.gameStarted }
-
-                    toast =
-                        makeToast <| peerUsername ++ " joined the game"
-                in
-                ( { model | peers = newPeerDict }, Cmd.batch [ hostSendGameInfo, hostEcho, toast ] )
-
-        PeerMsg (PeerPort.PeerDisconnect uuid) ->
-            let
-                newPeerDict =
-                    Dict.remove uuid model.peers
-
-                hostEcho = cmdIf model.options.isHost
-                    <| PeerPort.signalPeerDisconnected uuid
-
-                toast =
-                    case Maybe.map .username <| Dict.get uuid model.peers of
-                        Just name ->
-                            makeToast <| name ++ " has left the game"
-
-                        Nothing ->
-                            Cmd.none
+                        ( {game | players=Dict.insert uuid {player | gameState=newPlayerState} game.players}
+                        , newWikiGraph
+                        )
+                    Nothing -> (game, wikigraph)
             in
-            ( { model | peers = newPeerDict }, Cmd.batch [ hostEcho, toast ] )
-
-        PeerMsg (PeerPort.HostLost message) ->
-            if model.options.isHost then
-                ( { model | window = Bad "Host connection was lost... but you're the host" }, Cmd.none )
-
-            else
-                ( initialModel, Cmd.batch <| [ makeToast message, initCmd ] )
-
-        PeerMsg (PeerPort.GameFinish peeruuid path time) ->
-            case Dict.get peeruuid model.peers of
-                Just peer ->
-                    let
-                        peerGotToEnd =
-                            (List.reverse >> List.head >> Maybe.map .title) model.dests == List.head path
-
-                        updatedPeer =
-                            { peer | path = path, time = time, finished = True }
-
-                        toast =
-                            if peerGotToEnd then
-                                peer.username ++ " has finished!"
-
-                            else
-                                peer.username ++ " gave up"
-
-                        hostEcho = cmdIf model.options.isHost
-                                <| PeerPort.signalGameFinish peeruuid path time
-
-                    in
-                    ( { model | peers = Dict.insert peeruuid updatedPeer model.peers }, Cmd.batch [ hostEcho, makeToast toast ] )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        PeerMsg (PeerPort.GameInfo uuid info) ->
-            if uuid == model.options.uuid then
-                let
-                    hostName =
-                        (List.filter .isHost >> List.head >> Maybe.map .username >> Maybe.withDefault "???") info.peers
-
-                    addPeerToDict peer dict =
-                        Dict.insert peer.uuid { emptyPeer | uuid = peer.uuid, username = peer.username, isHost = peer.isHost, finished = peer.finished, lastDest = peer.lastDest } dict
-
-                    newPeerDict =
-                        List.foldl addPeerToDict model.peers info.peers
-
-                    options =
-                        model.options
-
-                    ( newModel, cmd ) =
-                        createGame { model | options = { options | seedStr = info.seed, numDestinations = info.numDestinations }, peers = newPeerDict, gameStarted = info.started }
-                in
-                ( newModel, Cmd.batch [ cmd, makeToast <| "You joined " ++ hostName ++ "'s game" ] )
-
-            else
-                ( model, Cmd.none )
-
-        PeerMsg (PeerPort.Malformed errorString) ->
-            ( { model | window = Bad errorString }, Cmd.none )
-
-        PeerMsg (PeerPort.Error err) ->
-            ( model, makeToast err )
-
-        GotUUID uuid ->
+            case model of
+                InGame page game opts wikigraph ->
+                    let (newGame, newWikiGraph) = updateGame game wikigraph
+                    in (InGame page newGame opts newWikiGraph, Cmd.none)
+                    
+                PostGameReview game wikigraph ->
+                    let (newGame, newWikiGraph) = updateGame game wikigraph
+                    in (PostGameReview newGame newWikiGraph, Cmd.none)
+                
+                _ ->
+                    (Bad "Received title from player when there is no current game...", Cmd.none)
+        
+        -- new player connected
+        -- update peers list
+        -- if host, send them lobby/game information
+        PeerMsg (PeerConnected uuid username) ->
             let
-                options =
-                    model.options
+                usedPlayerColors game = Dict.values game.players
+                    |> (::) game.self
+                    |> List.map .color
+                
+                newPlayerColor game = generateColorForNewPlayer (usedPlayerColors game) game.seed
+
+                -- update the state of the in-progress game
+                -- if the connected user already exists in the game state do nothing
+                -- (this means the player reconnected so send them their in-progress game state)
+                updateGame game = case initialGameState (List.map .title game.destinations) of
+                    Just initGame -> 
+                        let
+                            newPlayerList = Dict.update uuid
+                                (\entry -> case entry of
+                                    Just player -> Just { player | connected=True }
+                                    Nothing -> Just
+                                        { name=username
+                                        , color=newPlayerColor game
+                                        , gameState=initGame
+                                        , connected=True
+                                        }
+                                )
+                                game.players
+                        in Just { game | players=newPlayerList }
+                    Nothing -> Nothing
+                
+                -- if you are host and game has already started, send the new player the whole game state and player list
+                sendGameInfo game = cmdIf game.amHost
+                    <| PeerPort.directedMessage uuid (gameStateMessage game)
             in
-            ( { model | options = { options | uuid = uuid } }, Cmd.none )
-
-        ToggleReviewPlayer uuid ->
-            case model.window of
-                Review highlightedPlayers ->
+            case model of
+                Lobby lobby opts ->
                     let
-                        newHighlightedPlayers =
-                            if List.member uuid highlightedPlayers then
-                                List.filter ((/=) uuid) highlightedPlayers
+                        newPlayerList = Dict.insert uuid
+                            {name=username, color=newPlayerColor lobby}
+                            lobby.players
 
-                            else
-                                uuid :: highlightedPlayers
-                    in
-                    ( { model | window = Review newHighlightedPlayers }, Cmd.none )
+                        newLobby = {lobby | players=newPlayerList}
+                    -- if host, send lobby information back to the new player
+                        sendLobbyInfo = PeerPort.directedMessage uuid <| lobbyInfoMessage newLobby
+                    in ( Lobby newLobby opts, Cmd.batch [sendLobbyInfo, makeToast <| username ++ " joined the game"])
+                
+                InGame page game opts wikigraph -> case updateGame game of
+                    Just newGame -> ( InGame page newGame opts wikigraph, Cmd.batch [sendGameInfo newGame, makeToast <| username ++ " joined the game"])
+                    Nothing -> (Bad "Something went wrong updating the game with new player", Cmd.none)
+                    
+                PostGameReview game wikigraph -> case updateGame game of
+                    Just newGame -> ( PostGameReview newGame wikigraph, Cmd.batch [sendGameInfo newGame, makeToast <| username ++ " joined the game"])
+                    Nothing -> (Bad "Something went wrong updating the game with new player", Cmd.none)
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( Bad <| "Error: Player " ++ username ++ " : " ++ uuid ++ " connected when no game has been set up", Cmd.none)
 
-        GiveUp ->
+        PeerMsg (PeerDisconnected uuid) ->
             let
-                peerMsg =
-                    PeerPort.signalGameFinish model.options.uuid (List.map .title model.gameState.path) model.gameState.time
+                toast players = case Dict.get uuid players of
+                    Just player ->
+                        makeToast <| player.name ++ " has left the game"
+                    Nothing ->
+                        Cmd.none
+                
+                -- if game is in progress, mark them disconnected but keep their game state
+                -- (in case they join back later)
+                updatePlayerList = Dict.update uuid 
+                    <| Maybe.map (\player -> {player | connected = False})
             in
-            ( { model | window = Review [ model.options.uuid ] }, peerMsg )
+            case model of
+                Lobby lobby opts ->
+                    ( Lobby {lobby | players=Dict.remove uuid lobby.players} opts, toast lobby.players)
+                InGame page game opts wikigraph->
+                    ( InGame page {game | players=updatePlayerList game.players} opts wikigraph, toast game.players)
+                PostGameReview game wikigraph ->
+                    ( PostGameReview {game | players=updatePlayerList game.players} wikigraph, toast game.players)
+                _ ->  ( Bad "Peer disconnected while not in lobby/game", Cmd.none)
 
-        ClickedNewGame ->
-            if model.options.isHost then
-                reset model
-
-            else
-                ( { model | window = Bad "Only hosts can start new games" }, Cmd.none )
-
-        PeerMsg (PeerPort.HostWantsNewGame str) ->
+        PeerMsg HostLost ->
             let
-                toast =
-                    makeToast str
+                toast = makeToast "Connection to host lost..."
+                -- mark all players disconnected
+                newPlayerList game =
+                    let players = Dict.map (\_ player -> {player | connected=False}) game.players
+                    in { game | players=players}
+            in case model of
+                InGame page game opts wikigraph ->
+                    (InGame page (newPlayerList game) opts wikigraph, toast)
+                PostGameReview game wikigraph ->
+                    (PostGameReview (newPlayerList game) wikigraph, toast)
+                Lobby lobby _ ->
+                    (Welcome {inputJoinId="", inputName=lobby.self.name, seed=lobby.seed, uuid=lobby.uuid, displayPages=(Nothing, Nothing)}, toast)
+                _ -> (model, toast)
 
-                ( newModel, cmd ) =
-                    reset model
-            in
-            ( newModel, Cmd.batch [ cmd, toast ] )
+        -- receiving a game state message from the host means to enter in-game phase
+        PeerMsg (GameStateMessage game) ->
+            let
+                start = List.head game.destinations
+                    |> Maybe.map .title >> Maybe.withDefault "ERROR, HOST DID NOT SEND DESTINATIONS"
+
+                newGame opts = updateGameInfo opts game
+                    |> Maybe.map
+                        (\g -> let wikigraph = WikiGraph.init g.destinations in
+                            (InGame (Left start) g {startTime=Time.millisToPosix 0, currentTime=Time.millisToPosix 0} wikigraph, cmds)
+                        )
+                    |> Maybe.withDefault (Bad "Could not find yourself in the game information", Cmd.none)
+
+                cmds = Cmd.batch [Task.perform ReadyToStartGame Time.now, makeToast "You joined the game"]
+            in case model of
+                Welcome opts -> newGame opts
+                Lobby lobby _ -> newGame lobby
+                _ -> (Bad "Received a game invite but you're not eligible", Cmd.none)
+        
+        -- host has sent lobby info
+        -- either means you're just joining the lobby or the destination pages have changed
+        PeerMsg (LobbyInfoMessage lobby) ->
+            let newGame opts = updateGameInfo opts lobby
+                    |> Maybe.map (\g -> Lobby g {numDestinationsInput=List.length g.destinations})
+                    |> Maybe.withDefault (Bad "Could not find yourself in the lobby information")
+            in case model of
+                Welcome opts -> (newGame opts, makeToast "You joined the lobby")
+                Lobby opts _ -> (newGame opts, makeToast "Destination pages changed")
+                InGame _ opts _ _ -> (newGame opts, makeToast "Host wants a new game")
+                PostGameReview opts _ -> (newGame opts, makeToast "Host wants a new game")
+                _ -> (Bad "Why are you receiving lobby invitation?", Cmd.none)
+
+        PeerMsg (Error err) ->
+            ( model, makeToast <| "P2P error: " ++ err )
+
+        GiveUp -> case model of
+            InGame _ game _ wikigraph -> (PostGameReview game wikigraph, Cmd.none)
+            _ -> (Bad "You can't give up! You're not even playing", Cmd.none)
+
+        ClickedNewGame -> case model of
+            PostGameReview game _ -> 
+                if game.amHost then
+                    let
+                        lobby =
+                            { uuid=game.uuid
+                            , seed=game.seed
+                            , destinations=game.destinations
+                            , numDestinations=game.numDestinations
+                            , amHost=game.amHost
+                            , players= Dict.filter (\_ player -> player.connected) game.players
+                                |> Dict.map (\_ {name,color} -> {name=name, color=color})
+                            , self={name=game.self.name, color=game.self.color}
+                            }
+                    in
+                    ( Lobby lobby {numDestinationsInput=game.numDestinations}
+                    , PeerPort.broadcast (lobbyInfoMessage lobby)
+                    )
+                else
+                    (Bad "You can't click new game if you're not the host", Cmd.none)
+            _ -> (Bad "You clicked new game outside of the review page", Cmd.none)
+        
+        CopyToClipboard str -> (model, copyToClipboard str)
+
+        UpdatedWikiGraph wikigraph -> case model of
+            InGame page game opts _ -> (InGame page game opts wikigraph, Cmd.none)
+            PostGameReview game _ -> (PostGameReview game wikigraph, Cmd.none)
+            _ -> (Bad "Why are you receiving wikigraph tick?", Cmd.none)
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch <| [ Time.every 100 Tick, Sub.map PeerMsg PeerPort.receivePeerJSData ]
+    let wikiGraphSimulationTicker = WikiGraph.subscription >> Sub.map UpdatedWikiGraph
+    in
+    case model of
+    -- ticks on welcome to request more example titles
+    Welcome _ -> Sub.batch [ Time.every 5000 Tick, PeerPort.receiveData]
+    -- ticks while in game to update the time display
+    InGame _ _ _ wikigraph ->
+        Sub.batch [ Time.every 1000 Tick, PeerPort.receiveData, wikiGraphSimulationTicker wikigraph ]
+    PostGameReview _ wikigraph ->
+        Sub.batch [PeerPort.receiveData, wikiGraphSimulationTicker wikigraph]
+    _ -> PeerPort.receiveData
 
 
-main : Program () Model Msg
+{-| we expect an integer for an initial seed
+and a unique agent id generated by the peerJS server
+-}
+type alias Flags = {seed : Int, peerId : Maybe String}
+
+initModel : Flags -> ( Model, Cmd Msg )
+initModel {seed, peerId} =
+    let (previewTitles, newSeed) = Articles.generateTitleList 2 (Random.initialSeed seed)
+    in
+    ( Welcome {inputJoinId="", inputName="", uuid=peerId, seed=newSeed, displayPages=(Nothing, Nothing)}
+    , Cmd.batch <| List.map getWelcomePreview previewTitles
+    )
+
+main : Program Flags Model Msg
 main =
     Browser.element
-        { init = \_ -> ( initialModel, initCmd )
+        { init = initModel
         , view = view
         , update = update
         , subscriptions = subscriptions
         }
+

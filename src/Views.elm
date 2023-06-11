@@ -2,645 +2,669 @@ module Views exposing (view)
 
 import Dict
 import Helpers exposing (..)
-import Html exposing (Html, br, button, div, h1, h2, h3, h5, input, label, li, node, span, text, ul)
-import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, onInput)
-import Html.Parser as Parser exposing (Node(..))
+import Element exposing (..)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Events exposing (..)
+import Element.Font as Font
+import Element.Input as Input
+import Html exposing (Html)
+import Html.Attributes
 import Model exposing (..)
-import Regex
-
+import Types exposing (..)
+import Parse exposing (viewNode)
+import List.Extra
+import Colors.Opaque as EColor
+import Time
+import Either exposing (Either(..))
+import Basics.Extra
+import Debug
+import Html
+import Loading
+import WikiGraph exposing (WikiGraphState)
 
 {-
    This is where I keep all the ugly view code
 -}
 
 
-{-| add these styles to an element for a hover tooltip
+toCssString color =
+    let {red, green, blue} = toRgb color
+        rgb = List.map ((*) 255 >> round >> String.fromInt) [red, green, blue]
+    in String.concat <|
+        "rgb(" :: List.intersperse "," rgb ++ [")"]
+
+-- TODO use elm-ui instead
+-- TODO add indicator when other players are on same page as you (and before you)
+-- TODO allow navbar to indicate current position of peers
+-- TODO allow previous titles in current leg to be clicked and returned to in navbar
+linkStyle = [Font.underline, Font.color EColor.blue]
+
+{-| tab out external link
 -}
-toolTipStyles bodyText =
-    [ Html.Attributes.attribute "data-bs-toggle" "tooltip"
-    , Html.Attributes.attribute "data-bs-placement" "bottom"
-    , Html.Attributes.attribute "data-bs-container" "body"
-    , Html.Attributes.title bodyText
+simpleLink url label = newTabLink linkStyle {url=url, label=text label}
+
+buttonStyle =
+    [ Background.color EColor.floralwhite
+    , Border.width 2
+    , Border.rounded 2  
+    --, height (px 32)
+    , padding 3
+    , Font.size 16
+    , mouseOver [Border.glow EColor.grey 2]
+    , mouseDown [scale 1.1]
     ]
 
+disabledButtonStyle =
+    [ Border.color EColor.grey
+    , Border.width 2
+    , Border.rounded 2  
+    --, height (px 32)
+    , padding 1
+    , Font.size 16
+    , Font.color EColor.grey
+    ]
 
-backToMyPageLink =
-    Html.small [ class "d-inline m-2", style "float" "right" ] [ text "go back to ", Html.a [ class "wikilink", href "https://nicolaswinsten.github.io" ] [ text "my page" ] ]
+inputStyle =
+    [ Background.color EColor.ghostwhite
+    , Border.width 2
+    , Border.rounded 2
+    , Font.center
+    , mouseOver [Border.innerGlow (rgb255 208 210 196) 3]
+    ]
+
+rightarrow size = el [Font.size size] <| text "\u{2192}"
+
+downarrow size = el [Font.size size] <| text "\u{2193}"
+
+{-| animated loading spinner
+-}
+spinner =
+    let config = Loading.defaultConfig
+    in html <| Loading.render
+        Loading.Circle
+        {config | color=String.concat ["rgb(", String.fromInt 208, ",", String.fromInt 210, ",", String.fromInt 196, ")"]}
+        Loading.On
+
+pagebreak = el
+    [ width fill, Border.color (rgb255 208 210 196)
+    , Border.widthEach {bottom=2, left=0, right=0, top=0}
+    ]
+    none
+
+clipboard = image [width (px 20)] {src="assets/clippy.svg", description="copy lobby code to clipboard"}
+
+{-| recursive list item for bulleted lists
+-}
+type Li msg
+    = Li (Element msg) (List (Li msg))
+
+viewLi : Li msg -> Element msg
+viewLi (Li item children) =
+    row [ spacing 12, width fill ]
+        [ el [ alignTop ] (text "•")
+        , column [ spacing 6, width fill] (item :: List.map viewLi children)
+        ]
 
 
-break num =
-    span [] <| List.repeat num (br [] [])
+{-| view a preview of a wikipedia article with its title, thumbnail, and description in a column
+-}
+viewPagePreview :
+    { showDesc : Bool
+    , showLabelAbove : Bool
+    } -> PagePreview -> Element msg
+viewPagePreview {showDesc, showLabelAbove} {title, thumbnail, description} =
+    let
+        previewImageWidth = 150
+        img = Maybe.map (\{src} -> image [width (px previewImageWidth), centerX] {src=src, description=src}) thumbnail
+            |> Maybe.withDefault none
+        
+        desc = paragraph [centerX] [text description]
 
+        label = paragraph [Font.size 16, Font.center, Font.bold, width (minimum previewImageWidth fill), centerX] [text title]
+
+        -- content = row [centerX] [img, desc]
+        content = if showDesc then
+                textColumn [centerX, Font.size 14] [el [alignLeft, padding 1] img, desc]
+            else
+                el [centerX] img
+    in column [spacing 5] <| if showLabelAbove then [ label, content ] else [ content, label ]
+
+
+{-| render the player's colored name
+-}
+viewPlayerName : {hollow : Bool} -> Player b -> Element msg
+viewPlayerName {hollow} {name, color} =
+    let hollowAttrs =
+            [ htmlAttribute (Html.Attributes.style "-webkit-text-stroke" ("1px " ++ toCssString color))
+            , htmlAttribute (Html.Attributes.style "-webkit-text-fill-color" "rgba(0,0,0,0)")
+            ]
+    in el ([Font.color color, Font.bold] ++ if hollow then hollowAttrs else [])
+        (text name)
 
 {-| welcome page
 -}
-viewWelcome : Options -> Html Msg
+viewWelcome : WelcomeOpts -> Element Msg
 viewWelcome options =
     let
-        formFloating =
-            div [ class "form-floating" ]
+        usernameInput = Input.text inputStyle
+            { onChange = \input -> OnInputWelcomeParams {joinId=options.inputJoinId, name=input}
+            , text = options.inputName
+            , placeholder = Just <| Input.placeholder [] (el [Font.color (rgb255 208 210 196)] <| text "display name") 
+            , label = Input.labelHidden "display name"
+            }
+        
+        joinIdInput = Input.text inputStyle
+            { onChange = \input -> OnInputWelcomeParams {joinId=input, name=options.inputName}
+            , text = options.inputJoinId
+            , placeholder = Just <| Input.placeholder [] (el [Font.color (rgb255 208 210 196)] <| text "lobby code") 
+            , label = Input.labelHidden "lobby code"
+            }
 
-        usernameInput =
-            div [ class "container" ]
-                [ div [ class "row" ]
-                    [ div [ class "col" ] [ h3 [] [ text "Enter your username: " ] ]
-                    , div [ class "col-6" ]
-                        [ formFloating
-                            [ input [ id "username", class "form-control", placeholder "username", value options.username, onInput <| changeUsername options ] []
-                            , label [ Html.Attributes.for "username" ] [ text "Your username" ]
-                            ]
-                        ]
+        noName = options.inputName == ""
+        noJoinId = options.inputJoinId == ""
+        hostGameButton = Input.button (if noName then disabledButtonStyle else buttonStyle)
+            { label=text "Host Game", onPress=Just ClickedHostGame}
+        joinGameButton = Input.button (if noName || noJoinId then disabledButtonStyle else buttonStyle)
+            { label=text "Join Game", onPress=Just ClickedJoinGame }
+
+        inputSection = column [spacing 5]
+            [ usernameInput
+            , el [centerX] hostGameButton
+            , joinIdInput
+            , el [centerX] joinGameButton
+            ]
+
+        displayPages = 
+                let (page1, page2) = options.displayPages
+                    viewExampleTitle mpage = el [width (fillPortion 2)] <| case mpage of
+                        Just page -> el [alignBottom] <| viewPagePreview {showDesc=False, showLabelAbove=False} page
+                        Nothing -> el [centerY] spinner
+                in
+                row [spacing 20, centerX, alignBottom]
+                    [ viewExampleTitle page1
+                    , el [Font.extraBold, centerY, centerX] (rightarrow 64)
+                    , viewExampleTitle page2
                     ]
+
+        descSection = textColumn [Font.size 12, spacing 20]
+            [ paragraph [] <|
+                [ text
+                    """
+                    The aim of the game is to race through wikipedia while hitting all the important pages in order.
+                    Enter your username and either host your own game or join a friend's.
+                    """
                 ]
-
-        descSection =
-            singleRow <|
-                Html.p []
-                    [ Html.img [ class "m-2", style "float" "right", src "assets/wikilogo.png", width 300, alt "Wikipedia Game" ] []
-                    , Html.p []
-                        [ text """
-                              The aim of the game is to race through wikipedia while hitting all the important pages in order.
-                              Enter your username and either host your own game or join a friend's.
-                              """
-                        , break 2
-                        , text """
-                            To host your own game, pick a game seed (eg 'deadbeef' or 'pq9 83&#$hfl' or whatever you want) and specify the number of destinations you want in your game.
-                            """
-                        , break 2
-                        , text """To join a game, paste in the Join ID given by the game's host"""
-                        , break 2
-                        , text """Once in the game, you must hit every destination in order to complete the game. Race your friends and see who is the fastest wikiracer"""
-                        , break 2
-                        , text """You can play alone just by hosting your own game and forgetting to invite your friends"""
-                        , break 2
-                        , text """It is also possible that you will run into issues connecting with your friends for a variety of reasons.
-                                If that's the case then you might just agree on a seed together and everyone host their own game."""
-                        ]
-                    ]
-
-        hostGameSection =
-            div []
-                [ h3 [] [ text "Host" ]
-                , formFloating
-                    [ input [ class "form-control", id "seed", placeholder "Game Seed", value options.seedStr, onInput <| changeSeed options ] []
-                    , label [ Html.Attributes.for "seed" ] [ text "Game Seed" ]
-                    ]
-                , br [] []
-                , formFloating
-                    [ input [ class "form-select", id "numDests", type_ "number", value <| String.fromInt options.numDestinations, Html.Attributes.min "2", onInput <| changeNumDestinations options ] []
-                    , label [ Html.Attributes.for "numDests" ] [ text "Number of destinations" ]
-                    ]
-                , br [] []
-                , button [ onClick <| ClickedJoinOrHost { isHost = True } ] [ text "Host Game" ]
+            , paragraph [] <|
+                [ text
+                    """
+                    To host your own game, click "Host Game" and distribute the lobby code to your friends.
+                    """
                 ]
-
-        joinGameSection =
-            div []
-                [ h3 [] [ text "Join" ]
-                , div [ class "form-floating" ]
-                    [ input [ id "joinid", class "form-control", placeholder "Join ID", value options.joinId, onInput <| changeJoinId options ] []
-                    , label [ Html.Attributes.for "joinid" ] [ text "Join ID" ]
-                    ]
-                , br [] []
-                , button [ onClick <| ClickedJoinOrHost { isHost = False } ] [ text "Join Game" ]
+            , paragraph [] <| [text """To join a game, paste in the lobby code given by the game's host"""]
+            , paragraph [] <| [text """Once in the game, you must hit every destination in order to complete the game. Race your friends and see who is the fastest wikiracer"""]
+            , paragraph [] <| [text """You can play alone just by hosting your own game and forgetting to invite your friends"""]
+            , paragraph [] <|
+                [ text
+                    """
+                    Note: It is also possible that your browser is incompatible with some game features.
+                    If you're having trouble connecting to a game, then you may consider trying a different browser.
+                    """
                 ]
-
-        notesSection =
-            singleRow <|
-                div [ class "m-3" ]
-                    [ h3 [] [ text "Notes" ]
-                    , ul []
-                        [ li [] [ text "This game was built with Elm and PeerJS. ", Html.a [ class "wikilink", href "https://github.com/NicolasWinsten/racer" ] [ text "source code" ] ]
-                        , li [] [ text "All feedback and complaints go to nicolasd DOT winsten AT gmail DOT com" ]
+            ]
+        
+        -- bulleted list of some notes on the game
+        notesSection = column [Font.size 12, spacing 5, padding 10] <| List.map viewLi
+            [ Li (el [Font.bold] (text "How did I build this?"))
+                [ Li
+                    ( paragraph []
+                        [ text "The game logic and most of the styling is programmed in "
+                        , simpleLink "https://elm-lang.org/" "Elm"
+                        , text ", and P2P support is provided by "
+                        , simpleLink "https://peerjs.com/" "PeerJS"
                         ]
+                    )
+                    []
+                , Li
+                    ( paragraph []
+                        [ text "A very large pool of interesting articles were collected by a webscraper that accessed the Wikipedia "
+                        , simpleLink "https://en.wikipedia.org/w/api.php?action=help&modules=parse" "API"
+                        , text ", specifically looking for pages that are popularly visited"
+                        ]
+                    )
+                    []
+                , Li
+                    ( paragraph []
+                        [ text "You can visit the source code "
+                        , simpleLink "https://github.com/NicolasWinsten/racer" "here"
+                        ]
+                    )
+                    []
+                ]
+            , Li
+                ( paragraph []
+                    [ text "All feedback and complaints can be posted as an issue "
+                    , simpleLink "https://github.com/NicolasWinsten/racer/issues" "here"
                     ]
-    in
-    div []
-        [ backToMyPageLink
-        , div [ class "container" ]
-            [ singleRow <| h1 [] [ text "peer-to-peer Wikipedia game" ]
-            , descSection
-            , Html.hr [] []
-            , singleRow usernameInput
-            , Html.hr [] []
-            , singleRow <| div [ class "container" ] [ div [ class "row" ] [ div [ class "col" ] [ hostGameSection ], div [ class "col" ] [ joinGameSection ] ] ]
-            , Html.hr [] []
+                )
+                []
+            ]
+        
+        backToMyPageLink = paragraph []
+            [ text "go back to "
+            , link linkStyle
+                { url="https://nicolaswinsten.github.io"
+                , label=text "my page"
+                }
+            ]
+
+        -- display the page title and some example titles for hype
+        header = row [width fill, spacing 10, height (px 300)]
+            [ column [width (fillPortion 1), Font.center, centerX, spacing 10]
+                [ paragraph [width (fillPortion 1), Font.bold, Font.size 36 ]
+                    [text "peer-to-peer Wikipedia game"]
+                , paragraph [Font.hairline] [backToMyPageLink]
+                ]
+            , el [width (fillPortion 2)] displayPages
+            ]
+
+    in column [padding 10, spacing 10, centerX]
+        [ header
+        , pagebreak
+        , row [centerX, spacing 20]
+            [ descSection
+            , el [centerX] inputSection
+            ]
+        , pagebreak
+        , column []
+            [ el [Font.bold, Font.size 18] (text "Notes")
             , notesSection
             ]
         ]
 
+{-| display ordered list of previous met destinations, the current leg, and the remaining destinations to hit
 
-viewLink : List String -> String -> Html msg
-viewLink dests title =
+titles in the current leg can be clicked on to return to.
+
+display players above the page they're currently on, so you'll know if they're on your tail or ahead of you.
+-}
+viewProgress : InProgressGame -> Element Msg
+viewProgress game =
     let
-        element =
-            Html.a [ class "hoverUnderline", href <| "https://en.wikipedia.org/wiki/" ++ title, target "_blank" ] [ text title ]
-    in
-    if List.member title dests then
-        Html.b [] [ element ]
+        state = game.self.gameState
 
-    else
-        element
+        -- get the destinations reached and the destinations needed
+        (metDestinations, remainingDestinations) = List.map .title game.destinations
+            |> List.Extra.splitAt (List.length state.previousLegs + 1)
 
+        -- titles in the player's current leg (including the last destination they reached)
+        currentLeg = legToList state.currentLeg
 
-viewPath : { username : Maybe String, path : List String, dests : List String, showLength : Bool } -> Html msg
-viewPath { username, path, dests, showLength } =
-    let
-        first =
-            List.head path |> Maybe.withDefault ""
+        -- has the player touched this title?
+        -- TODO we want to mark players above a title if they actually made that progress
+        -- right now this implementation will mark players ahead of you just if they've seen a destination page ahead
+        playerTouched title playerId = case Dict.get playerId game.players of
+            Just player -> List.member title (gameStateToList player.gameState)
+            Nothing -> False
 
-        final =
-            last path |> Maybe.withDefault ""
+        playerIds = Dict.keys game.players
 
-        isComplete =
-            List.member first dests && List.member final dests && List.length path > 1
+        -- map each player with the title they should be displayed over
+        -- TODO player should appear above latest destination they've been to (even if they're not currently on it)
+        displayAbove titles = case titles of
+            (title :: rest) -> List.filter (playerTouched title) playerIds
+                |> List.map (\p -> (p, title))
+                |> Dict.fromList
+                |> Dict.union (displayAbove rest)
+            [] ->
+                Dict.empty
+        
+        -- list of titles in display order
+        -- we're displaying the previously met destinations, the current leg, and the unmet destinations 
+        titleList = List.Extra.init metDestinations
+            |> Maybe.withDefault []
+            |> \metDests -> metDests ++ currentLeg ++ remainingDestinations
 
-        lengthText =
-            if isComplete then
-                " : (" ++ String.fromInt (List.length path - 1) ++ ")"
+        -- render the players that should be displayed above some title
+        displayPlayersAbove title = displayAbove titleList
+            |> Dict.filter (\_ title_ -> title == title_)
+            |> Dict.keys
+            |> List.map (\uuid -> Dict.get uuid game.players)
+            |> List.filterMap identity
+            |> List.map (\player -> viewPlayerName {hollow=not player.connected} player)
+            |> List.intersperse (text " ")
+            |> paragraph [Font.center, Font.size 14, width fill]
 
+        -- allow the user to click on any past title from the current leg to return back to it
+        viewCurrentLegTitle title = el [alignBottom] <|
+            if title == state.currentLeg.currentPage then
+                el [Font.size 32, Font.bold] (text title)
             else
-                " : (DNF)"
-    in
-    span []
-        [ Maybe.map (\u -> Html.b [] [ text <| u ++ " : " ]) username |> Maybe.withDefault (text "")
-        , span [] (path |> List.map (viewLink dests) |> List.intersperse (rightarrow 1))
-        , if showLength then
-            Html.b [] [ text lengthText ]
+                column []
+                    [ displayPlayersAbove title
+                    , Input.button []
+                        { onPress=Just (ClickedLink title)
+                        , label=el [Font.light, htmlAttribute (Html.Attributes.class "hoverUnderline")] <| text title
+                        }
+                    ]
+        -- destination titles are bolded
+        viewDestinationTitle title = column [alignBottom]
+            [ displayPlayersAbove title
+            , el [Font.semiBold] (text title)
+            ]
 
-          else
-            text ""
+    in List.Extra.init metDestinations
+        |> Maybe.withDefault []
+        |> \prevDests ->
+            List.map viewDestinationTitle prevDests
+            ++ List.map viewCurrentLegTitle currentLeg
+            ++ List.map viewDestinationTitle remainingDestinations
+        |> List.intersperse (el [alignBottom] (rightarrow 24))
+        |> wrappedRow [width fill, spacingXY 0 10]
+
+
+{-| view a list of page previews as a column with arrows in between
+-}
+viewPagePreviews : List PagePreview -> Element msg
+viewPagePreviews previews = List.map (viewPagePreview {showLabelAbove=True, showDesc=True}) previews
+    |> List.intersperse (el [centerX] <| downarrow 64)
+    |> column [spacing 10]
+
+{-| view the lobby code as the host,
+provide copy-to-clipboard button
+-}
+gameIdView : Maybe PeerId -> Element Msg
+gameIdView muuid = case muuid of
+    Just uuid -> row []
+        [ Input.text (Font.size 14 :: height (px 30) :: inputStyle)
+            { onChange=\_ -> NoOp
+            , text = uuid
+            , placeholder = Nothing
+            , label = Input.labelAbove [Font.size 14] (text "Copy this lobby code to send to your friends")
+            }
+        , Input.button (alignBottom :: buttonStyle)
+            { onPress=Just (CopyToClipboard uuid)
+            , label=clipboard
+            }
+        ]
+    Nothing -> text "No peer agent. Try refreshing if you want to play with friends"
+
+{-| slider to adjust the number of destinations
+-}
+numDestinationsSlider : Int -> Element Msg
+numDestinationsSlider num = Input.slider
+    [
+    -- Here is where we're creating/styling the "track"
+    behindContent
+        (el
+            [ width fill
+            , height (px 4)
+            , centerY
+            , Background.color EColor.grey
+            , Border.rounded 2
+            ]
+            none
+        )
+    ]
+    { onChange = round >> \i -> OnInputLobbyParams {numDestinations=i}
+    , label = Input.labelAbove [Font.size 14] (el [centerX]<| text <| "number of destinations: " ++ String.fromInt num)
+    , min = 2
+    , max = 10
+    , step = Just 1
+    , value = toFloat num
+    , thumb = Input.thumb
+        [ width (px 16)
+        , height (px 16)
+        , Border.rounded 8
+        , Border.width 1
+        , Border.color (EColor.black)
+        , Background.color EColor.floralwhite
+        ]
+    }
+{-| display the lobby with a preview of the goals on the left side
+and the player list on the right side
+-}
+viewLobby : Lobby -> LobbyOpts -> Element Msg
+viewLobby lobby opts =
+    let
+        startButton =
+            if List.length lobby.destinations == lobby.numDestinations then
+                Input.button buttonStyle { onPress=Just ClickedStartGame, label=text "Start game"}
+            else
+                Input.button disabledButtonStyle { onPress=Nothing, label=text "Start game"}
+        
+        refreshLobbyButton = Input.button buttonStyle { onPress=Just RefreshLobby, label=text "Refresh" }
+
+        hostInputSection = column [spacing 25]
+            [ el [Font.bold, centerX] (text "You are the host")
+            , gameIdView lobby.uuid
+            , numDestinationsSlider opts.numDestinationsInput
+            , row [spacing 5, width fill]
+                <| List.map (el [width fill])
+                <| List.map (el [centerX]) [ refreshLobbyButton, startButton ]
+            ]
+
+        playerList = column [Font.center, centerX, spacing 5]
+            <| List.map (el [centerX])
+            <| List.map (viewPlayerName {hollow=False}) (allPlayers lobby)
+    in
+    row [width fill, padding 20, spacing 10, centerX]
+        [ column [spacing 10, width fill]
+            [ el [centerX, Font.size 32, Font.bold] (text "The Destinations") 
+            , el [centerX] <| viewPagePreviews lobby.destinations
+            ]
+        , column [ alignTop, alignRight, spacing 20 ]
+            [ if lobby.amHost then hostInputSection else text "Waiting for host to start game"
+            , pagebreak
+            , el [Font.size 24, Font.bold, centerX] (text "Players")
+            , playerList
+            ]
         ]
 
 
-{-| display the best path segments from the players for each consecutive pair of destinations
+-- display the shortest paths produced by all the players
+-- 
+{-! display the shortest paths produced by all the players for each leg of the game
+
+color the paths with the player colors in between the thumbnails of the destinations
 -}
-viewBestSegments : List Peer -> List String -> Html msg
-viewBestSegments players dests =
+bestLegsDisplay : InProgressGame -> Element msg
+bestLegsDisplay game =
     let
-        getSegments : Peer -> List Segment
-        getSegments player =
-            segments (\x -> List.member x dests) player.path
-                |> List.map (\path -> { username = player.username, seq = List.reverse path })
+        -- view a leg as a row of titles and external links to wikipedia
+        viewLeg leg =
+            let (start, steps, goal) = legParts leg
+                viewStep title = newTabLink [htmlAttribute (Html.Attributes.class "hoverUnderline")]
+                    { url="https://en.wikipedia.org/wiki/" ++ encodeTitle title, label=text title }
 
-        bests =
-            bestSegs dests <| List.concatMap getSegments players
+                arr = rightarrow 14
+                els = List.map viewStep steps
+                    |> List.intersperse arr
+                    |> (::) arr
+                    |> \ells -> if List.isEmpty steps then [] else ells ++ [arr]
 
-        viewSeg : Segment -> Html msg
-        viewSeg seg =
-            div [ class "row mb-3" ]
-                [ singleRow <| viewPath { username = Just seg.username, path = seg.seq, dests = dests, showLength = True }
+            in wrappedRow [width fill, spaceEvenly] els
+
+        getLength (player, leg) = List.length leg.previousPages
+        shortestLength = List.map getLength >> List.minimum >> Maybe.withDefault Basics.Extra.maxSafeInteger
+        allLegs = allPlayers game
+            |> List.concatMap (\player -> List.map (Tuple.pair player) (getCompletedLegs player.gameState))
+
+        getBestLegsFor : Title -> List (Player InGameAttributes, Leg)
+        getBestLegsFor title = List.filter (Tuple.second >> .goal >> (==) title) allLegs
+            |> \legs -> List.filter (getLength >> (==) (shortestLength legs)) legs
+                
+        viewBestLegsFor : PagePreview -> PagePreview -> Element msg
+        viewBestLegsFor start goal =
+            let bestLegs = getBestLegsFor goal.title
+                legsView = bestLegs
+                    |> List.map (\(player, leg) ->
+                        el [Background.color player.color, width fill, paddingXY 10 3] (viewLeg leg))
+                    |> column [spaceEvenly, width fill, centerY]
+                
+                numSteps = case bestLegs of
+                    (_, leg) :: _ ->
+                        let n = List.length leg.previousPages
+                        in text (String.fromInt n ++ " steps")
+                    [] -> none
+
+            in row [width fill]
+                [ viewPagePreview {showLabelAbove=False, showDesc=False} start
+                -- , column [width fill, centerY, spacing 10]
+                --     [ el [centerX, Font.bold] numSteps, el [width fill, centerY] legsView ]
+                , if List.isEmpty bestLegs then paragraph [Font.center] [text "Waiting for player to connect these titles..."]
+                    else el [width fill, centerY, above <| el [Font.bold, centerX, padding 5] numSteps] legsView
+                , viewPagePreview {showLabelAbove=False, showDesc=False} goal
+                ]
+    in column [Font.size 14, spacing 25]
+        <| List.intersperse pagebreak
+        <| List.map (Basics.Extra.uncurry viewBestLegsFor) (window game.destinations)
+
+
+{-| render the post game review screen
+
+when player finishes or gives up, enter the game review screen where
+they can view the leaderboards and the best wikiladders from the players
+-}
+viewPostGame : InProgressGame -> WikiGraphState -> Element Msg
+viewPostGame game wikigraph =
+    let
+        players = allPlayers game
+        finishedPlayers = List.filter (.gameState >> isGameFinished) players
+        unfinishedPlayers = List.filter
+            (Basics.Extra.flip List.member finishedPlayers >> not) players
+
+        byTimeLeaderboard =
+            let playerTime = (.gameState >> .finishTime >> Maybe.withDefault Basics.Extra.maxSafeInteger)
+
+                displayTimeOfPlayer {gameState} = case gameState.finishTime of
+                    Just timeInMs ->
+                        if isGameFinished gameState then
+                            let {min,sec,ms} = msToDisplayTime timeInMs
+                            in text <| String.concat [String.fromInt min, "m ", String.fromInt sec, ".", String.fromInt ms, "s"]
+                        else
+                            text "(gave up)"
+                    Nothing -> text "(not finished)"
+            in mkLeaderBoard "Time" playerTime displayTimeOfPlayer
+
+        byLengthLeaderboard =
+            let playersByLength = (.gameState >> numSteps)
+                displayNumSteps {gameState} = text <| String.fromInt (numSteps gameState)
+                    ++ if isGameFinished gameState then "" else " (not finished)"
+            in mkLeaderBoard "Total Path Length" playersByLength displayNumSteps
+        
+        -- create a table that displays the scores of the players by some metric
+        mkLeaderBoard : String -> (Player InGameAttributes -> Int) -> (Player InGameAttributes -> Element msg) -> Element msg
+        mkLeaderBoard headerTitle comparator scoreView =
+            let table_ = table [Font.alignRight, spacing 5]
+                    { data = List.sortBy comparator finishedPlayers ++ List.sortBy comparator unfinishedPlayers
+                    , columns =
+                        [
+                            { header=none
+                            , width=fill
+                            , view=\player -> viewPlayerName {hollow=not player.connected} player
+                            }
+                            ,
+                            { header=none
+                            , width=fill
+                            , view=scoreView
+                            }
+                        ]
+                    }
+            in column
+                [ Background.color EColor.floralwhite
+                , Border.color EColor.black
+                , Border.width 2
+                , padding 10
+                , spacing 5
+                ]
+                [ el [Font.bold, centerX] <| text headerTitle
+                , pagebreak
+                , table_
                 ]
 
-        segViews =
-            List.map viewSeg bests
-    in
-    if List.isEmpty bests then
-        text ""
+        svgWikiGraph =
+            let playerColorMap = game.players
+                    |> Dict.insert (Maybe.withDefault "" game.uuid) game.self
+                    |> Dict.map (\_ {color} -> toRgb color )
+            in html <| WikiGraph.view wikigraph playerColorMap
+            
+        newGameButton = Input.button buttonStyle {onPress=Just ClickedNewGame, label=text "New Game"}
 
-    else
-        div [ class "container-fluid" ] <|
-            (singleRow <| h3 [] [ text "best wikiladders" ])
-                :: segViews
-
-
-{-| convert parser Node to custom Html, stripping out the unnecessary bits
--}
-viewNode : Parser.Node -> Html Msg
-viewNode n =
-    let
-        -- the html fetched from the wiki api has local urls in their links
-        -- so we need to add https 
-        imgurlstart = Maybe.withDefault Regex.never <|
-            Regex.fromString "//upload.wikimedia.org"
-        fixurls = Regex.replace imgurlstart (\_ -> "https://upload.wikimedia.org")
-
-        attr2htmlattr (prop, val) = case prop of
-            "src" -> Html.Attributes.attribute "src" (fixurls val)
-            "srcset" -> Html.Attributes.attribute "srcset" (fixurls val)
-            _ -> Html.Attributes.attribute prop val
-        
-        -- make the straightforward conversion to Html object
-        convert parsedNode = case parsedNode of
-            Element tag attrs children -> node tag (List.map attr2htmlattr attrs) (List.map viewNode children)
-            Text s -> text s
-            Comment _ -> text ""
-    in
-    case n of
-        -- we want to reroute the wikilinks to onClick events
-        Element "a" (( "href", link ) :: attrs) children ->
-            let
-                isUnwantedNamespace =
-                    List.any (\ns -> String.startsWith ("/wiki/" ++ ns ++ ":") link) unwantedNamespaces
-            in
-            if isUnwantedNamespace then
-                -- do not allow File, Category, Wikipedia links to be clicked
-                Html.a (List.map attr2htmlattr attrs) (List.map viewNode children)
-
-            else if String.startsWith "/wiki/" link then
-                Html.a [ class "wikilink", href "#", onClick (ClickedLink <| String.dropLeft 6 link) ] (List.map viewNode children)
-
-            else if String.startsWith "#" link then
-                -- catch other inpage reference tags such as section navigators
-                Html.a (href link :: List.map attr2htmlattr attrs) (List.map viewNode children)
-
-            else
-                Html.a (List.map attr2htmlattr attrs) (List.map viewNode children)
-
-        Element "a" _ children ->
-            -- try and catch external links and mask them
-            span [] (List.map viewNode children)
-
-        -- hide edit sections
-        Element "span" (( "class", "mw-editsection" ) :: _) _ ->
-            text ""
-
-        -- underline the section links in the contents navigator
-        Element "span" (( "class", "toctext" ) :: attrs) children ->
-            span (style "text-decoration" "underline" :: List.map attr2htmlattr attrs) (List.map viewNode children)
-
-        --ignore coordinates info for places
-        Element "span" (( "id", "coordinates" ) :: _) _ ->
-            text ""
-
-        Element "form" _ _ ->
-            text ""
-
-        -- hide boring headers
-        Element "span" (( "class", clazz ) :: ( "id", headline ) :: _) _ as header ->
-            if String.contains "mw-headline" clazz && List.member headline [ "Citations", "Notes", "References" ] then
-                text ""
-
-            else
-                convert header
-
-        -- hide references section
-        Element "div" (( "class", clazz ) :: _) _ as el ->
-            if String.startsWith "reflist" clazz then
-                text ""
-
-            else
-                convert el
-
-        -- hide superscript tags, they're citation links
-        Element "sup" _ _ ->
-            text ""
-
-        el ->
-            convert el
-
-
-{-| view each connected peer and the last destination they hit
--}
-viewPeerLocs : List Peer -> Html Msg
-viewPeerLocs peers =
-    let
-        peerView peer =
-            singleRow <| div [] [ Html.b [] [ text peer.username ], br [] [], text peer.lastDest ]
-
-        theView =
-            List.intersperse (Html.hr [] []) <| List.map peerView peers
-    in
-    div [ class "container" ] theView
-
-
-{-| view the path of titles highlighting the ones that are also destinations
--}
-viewPathVertical : List String -> List String -> Html msg
-viewPathVertical titles dests =
-    let
-        toText title =
-            if List.member title dests then
-                Html.b [] [ text title ]
-
-            else
-                text title
-
-        titleTexts =
-            List.map toText titles
-
-        withArrows =
-            List.intersperse (uparrow 2) titleTexts
-    in
-    div [ class "container" ] <| List.map singleRow withArrows
-
-
-viewPagePreviews : List LoadingDestination -> Html Msg
-viewPagePreviews dests =
-    let
-        resizedImg img =
-            div [ class "previewImage" ] [ img ]
-
-        viewPagePreview : LoadingDestination -> Html Msg
-        viewPagePreview page =
-            singleRow <|
-                div [ class "container" ] <|
-                    List.map singleRow <|
-                        case page of
-                            Loading title ->
-                                [ h5 [] [ text title ], div [ class "spinner-border" ] [] ]
-
-                            Loaded loadedPage ->
-                                [ h5 [] [ text loadedPage.title ]
-                                , Maybe.map (\url -> Html.img [src url] []) loadedPage.image
-                                    |> Maybe.withDefault (text "")
-                                    |> resizedImg
-                                , Html.i [] [ text loadedPage.desc ]
-                                ]
-
-        downArrowElement =
-            singleRow <| downarrow 5
-
-        header =
-            h1 [] [ text "The Destinations" ]
-    in
-    List.map viewPagePreview dests |> List.intersperse downArrowElement |> (::) header |> div [ class "container", style "text-align" "center" ]
-
+    in column [centerX, spacing 15, padding 15]
+        [ row [spaceEvenly, centerX]
+            [ byTimeLeaderboard, byLengthLeaderboard]
+        , el [width fill, Border.width 2] svgWikiGraph
+        , column [] [ el [Font.bold, centerX] (text "Best paths"), bestLegsDisplay game]
+        , el [centerX] <| if game.amHost then newGameButton else (text "Waiting for host to start a new game...")
+        ]
 
 view : Model -> Html Msg
-view model =
-    case model.window of
-        PreGame ->
-            viewWelcome model.options
+view model = case model of
+    -- welcome screen
+    Welcome opts -> layout [] <| viewWelcome opts
 
-        Preview ->
-            let
-                copyIdBox =
-                    if model.options.isHost then
-                        div [ class "m-2" ]
-                            [ text "Copy this game ID and send it to your friends:"
-                            , div [ class "d-inline-block" ]
-                                [ input [ id "hostid", value model.options.peerId, readonly True ] []
-                                , button (class "clippybtn" :: Html.Attributes.attribute "data-clipboard-target" "#hostid" :: toolTipStyles "Copy to clipboard") [ Html.img [ src "assets/clippy.svg", width 13 ] [] ]
-                                ]
-                            ]
+    -- lobby screen where players typically join in and see the goal titles for the game
+    Lobby lobby opts -> layout [] <| viewLobby lobby opts
+        
+    -- while in game, display your progress at the top
+    -- display the article content
+    InGame (Right page) game opts _ -> 
+        let
+            giveUpBtn = Input.button buttonStyle { onPress=Just GiveUp, label=text "Give Up"}
 
-                    else
-                        text ""
+            timeDisplay =
+                let
+                    {min, sec} = msToDisplayTime (Time.posixToMillis opts.currentTime - Time.posixToMillis opts.startTime)
+                in 
+                text <| String.fromInt min ++ "m " ++ String.fromInt sec ++ "s"
 
-                peersView =
-                    let
-                        peerEl peer =
-                            singleRow <|
-                                Html.b []
-                                    [ text <|
-                                        if peer.isHost then
-                                            "Host: " ++ peer.username
-
-                                        else
-                                            "" ++ peer.username
-                                    ]
-
-                        peerList =
-                            List.map peerEl <| Dict.values model.peers
-                    in
-                    if not <| List.isEmpty peerList then
-                        div [ class "container border border-2 border-dark p-2" ] ((singleRow <| h5 [] [ text "Other players" ]) :: Html.hr [] [] :: peerList)
-
-                    else
-                        text ""
-
-                allDestsLoaded =
-                    doneLoading model.loadingDests
-
-                refreshDisabled =
-                    model.seedChange == model.options.seedStr && model.numDestsChange == model.options.numDestinations
-
-                ( startBtn, refreshOptions ) =
-                    let
-                        refreshBtn_ =
-                            let
-                                changeSeed str =
-                                    ChangeOptsWhileInPreview { seed = str, numDests = model.numDestsChange }
-
-                                changeNum str =
-                                    String.toInt str |> Maybe.withDefault model.numDestsChange |> (\num -> ChangeOptsWhileInPreview { seed = model.seedChange, numDests = num })
-                            in
-                            div [ class "container-fluid" ]
-                                [ div [ class "input-group" ]
-                                    [ input [ id "num-dests", class "form-control", placeholder "num destinations", type_ "number", value <| String.fromInt model.numDestsChange, Html.Attributes.min "2", onInput changeNum ] []
-                                    , input [ id "seed", class "form-control", placeholder "new game seed", value model.seedChange, onInput changeSeed ] []
-                                    , button [ disabled refreshDisabled, onClick Refresh ] [ text "Refresh" ]
-                                    ]
-                                ]
-                    in
-                    if allDestsLoaded && model.options.isHost then
-                        ( button [ onClick <| StartGame, class "m-2" ] [ text "Start game" ]
-                        , refreshBtn_
-                        )
-
-                    else if model.options.isHost then
-                        ( text "Waiting for destinations to finish loading...", refreshBtn_ )
-
-                    else
-                        ( text "Waiting for host to start game...", text "" )
-            in
-            div [ class "container", style "text-align" "center" ]
-                [ div [ class "row" ]
-                    [ div [ class "col" ] [ viewPagePreviews model.loadingDests ]
-                    , div [ class "col mt-5" ] [ copyIdBox, refreshOptions, startBtn, peersView ]
+            -- we're only using ElmUI to create the top progress display while in game
+            -- trying to wrap the article content in ElmUI breaks its styling
+            progressbar = layout
+                [ Border.widthEach {bottom=2, top=0, left=0, right=0}
+                , Border.color EColor.darkgrey
+                , Background.color (rgb255 208 210 196)
+                , htmlAttribute (Html.Attributes.style "position" "-webkit-sticky")
+                , htmlAttribute (Html.Attributes.style "position" "sticky")
+                , htmlAttribute (Html.Attributes.style "top" "0")
+                , htmlAttribute (Html.Attributes.style "z-index" "100") -- the wikipedia infobox elements were appearing above the progress bar
+                ]
+                <| row [width fill, spacing 10, padding 10]
+                    [ viewProgress game
+                    , el [alignRight] timeDisplay
+                    , el [alignRight] giveUpBtn
                     ]
-                ]
 
-        InPage page ->
-            let
-                toHeader dest =
-                    span (style "padding" "5px" :: style "font-size" "1.1em" :: toolTipStyles dest.desc) [ text dest.title ]
+            articleContent = viewNode page.content
 
-                titleAndDests =
-                    h2 [ style "display" "inline" ] [ text page.title ] :: List.map toHeader model.gameState.remainingDests
+            -- get all the players that are currently on the same page as you
+            playersHere = Dict.values game.players
+                |> List.filter (\player -> player.gameState.currentLeg.currentPage == page.title)
+                |> List.filter .connected
 
-                withPastDests =
-                    List.map toHeader (List.reverse <| popBy .title page model.gameState.pastDests) ++ titleAndDests
+            -- get all the players that aren't here but previously were
+            playersThatWereHere =
+                let beenHere {gameState} = gameState.currentLeg :: gameState.previousLegs
+                        |> List.concatMap legToList
+                        |> List.member page.title
+                in Dict.values game.players
+                    |> List.filter beenHere
+                    |> List.filter (not << \player -> List.member player playersHere )
 
-                withArrows =
-                    div [ class "nav-item" ] <| List.intersperse (rightarrow 2) withPastDests
+            -- display the names of any players that have visited the page you're on
+            playerList = layoutWith {options=[noStaticStyleSheet]} [] <| row [spacing 10, padding 10]
+                <| List.map (viewPlayerName {hollow=False}) playersHere
+                    ++ List.map (viewPlayerName {hollow=True}) playersThatWereHere
 
-                goBackBtn =
-                    if List.length model.gameState.path > 1 then
-                        button [ class "btn btn-outline-dark", onClick GoBack ] [ text "Go Back" ]
+        in
+        -- the wikipage article body using external styling, so mixing it in with Elm UI breaks it,
+        -- so unfortunately I can't align the body with Elm UI
+        Html.div [] [progressbar, playerList, articleContent]
 
-                    else
-                        text ""
+    InGame (Left title) _ _ _ -> layout [] <|
+        el [padding 20] (text ("Fetching " ++ title ++ "..."))
 
-                giveUpBtn =
-                    button [ class "btn btn-outline-dark m-3", onClick GiveUp ] [ text "Give Up" ]
+    PostGameReview game wikigraph -> layout [] (viewPostGame game wikigraph)
 
-                timeDisplay =
-                    let
-                        timeInSec =
-                            model.gameState.time // 100
-                    in
-                    h3 [] [ text <| String.fromInt timeInSec ++ "s" ]
-
-                navbar =
-                    node "nav"
-                        [ class "navbar navbar-light border-bottom border-secondary border-3 fixed-top" ]
-                    <|
-                        [ div [ class "container-fluid" ] [ withArrows, timeDisplay, goBackBtn ] ]
-
-                dummyNavbar =
-                    -- this dummy navbar is used to pad the body content so that the real navbar doesn't overlap it.
-                    -- just using padding doesn't work well because the navbar's size is not fixed
-                    node "nav"
-                        [ class "navbar invisible" ]
-                    <|
-                        [ div [ class "container-fluid" ] [ withArrows, timeDisplay, goBackBtn ] ]
-
-                rightSideView =
-                    if Dict.size model.peers == 0 then
-                        let
-                            destTitles =
-                                List.map .title model.dests
-
-                            pathTitles =
-                                List.map .title model.gameState.path
-                        in
-                        viewPathVertical pathTitles destTitles
-
-                    else
-                        viewPeerLocs <| Dict.values model.peers
-
-                bodyContainer =
-                    div [ class "container-fluid pt-4" ]
-                        [ div [ class "row" ]
-                            [ div [ class "col-10" ] [ viewNode page.content ]
-                            , div [ class "col-2" ] [ giveUpBtn, rightSideView ]
-                            ]
-                        ]
-            in
-            div [] [ dummyNavbar, navbar, bodyContainer ]
-
-        Fetching title ->
-            h1 [] [ text <| "Fetching " ++ title ++ " ..." ]
-
-        Review playersToCompare ->
-            let
-                timeInSec time =
-                    time // 100
-
-                destTitles =
-                    List.map .title model.dests
-
-                you : Peer
-                you =
-                    { username = model.options.username
-                    , path = List.map .title model.gameState.path
-                    , uuid = model.options.uuid
-                    , time = model.gameState.time
-                    , lastDest = List.head model.gameState.pastDests |> Maybe.map .title |> Maybe.withDefault ""
-                    , isHost = model.options.isHost
-                    , finished = True
-                    , currentTitle = List.head model.gameState.path |> Maybe.map .title |> Maybe.withDefault ""
-                    }
-
-                gotToEnd player =
-                    Just player.lastDest == last destTitles
-
-                playerList : List Peer
-                playerList =
-                    you :: Dict.values model.peers
-
-                unfinishedPlayers =
-                    List.filter (.finished >> not) playerList
-
-                playersThatGotToEnd =
-                    List.filter gotToEnd playerList
-
-                playersThatGaveUp =
-                    List.filter (\p -> not (gotToEnd p) && p.finished) playerList
-
-                {- create a leaderboard of the players sorted by `f` and displaying `player |> f |> toString` -}
-                leaderboard header f toString =
-                    let
-                        playerView player =
-                            let
-                                stat =
-                                    if gotToEnd player then
-                                        toString (f player)
-
-                                    else
-                                        "DNF"
-
-                                name =
-                                    if model.options.username == player.username then
-                                        Html.b [] [ text player.username ]
-
-                                    else
-                                        text player.username
-                            in
-                            [ Html.a [ class "hoverUnderline", href "#", onClick <| ToggleReviewPlayer player.uuid ] [ name ], text <| " " ++ stat ]
-                                |> span []
-
-                        sortedPlayersView =
-                            List.map playerView <| List.sortBy f playersThatGotToEnd ++ playersThatGaveUp
-                    in
-                    (h3 [] [ text header ] :: Html.hr [] [] :: sortedPlayersView)
-                        |> List.map singleRow
-                        |> div [ class "container border border-dark border-2 bg-light m-3 p-2", style "text-align" "center" ]
-
-                timeBoard =
-                    leaderboard "Time" .time (timeInSec >> String.fromInt >> (\t -> t ++ "s"))
-
-                lengthBoard =
-                    leaderboard "Path Length" (.path >> List.length) ((+) -1 >> String.fromInt >> (\l -> l ++ " steps"))
-
-                boardsView =
-                    div [ class "container" ]
-                        [ div [ class "row" ] [ div [ class "col" ] [ timeBoard ], div [ class "col" ] [ lengthBoard ] ]
-                        ]
-
-                comparePlayersView =
-                    -- compare the path segments of the highlighted players
-                    let
-                        players =
-                            List.filter (\p -> List.member p.uuid playersToCompare) playerList
-
-                        getPathSegments player =
-                            player.path
-                                |> List.reverse
-                                |> threads (\dest -> List.member dest destTitles)
-                                |> List.map (Tuple.pair player.username)
-
-                        playersSegments =
-                            List.map getPathSegments players
-                                |> transpose
-
-                        viewPlayerSegment ( username, seg ) =
-                            div [ class "row mb-2" ]
-                                [ singleRow <| viewPath { username = Just username, path = seg, dests = destTitles, showLength = True }
-                                ]
-                    in
-                    List.map (List.map viewPlayerSegment >> div [ class "row mb-5" ]) playersSegments |> div [ class "container-fluid mb-5" ]
-
-                unfinishedPlayersView =
-                    let
-                        viewPlayer player =
-                            div [ class "col-3" ] [ Html.b [] [ text player.username ], Html.br [] [], viewLink destTitles player.currentTitle ]
-                    in
-                    if List.length unfinishedPlayers > 0 then
-                        div [ class "container-fluid mb-5" ] [ singleRow <| h3 [] [ text "unfinished players" ], div [ class "row" ] <| List.map viewPlayer unfinishedPlayers ]
-
-                    else
-                        text ""
-            in
-            div [ class "container-fluid" ]
-                [ boardsView
-                , Html.hr [] []
-                , singleRow <| text "Click on a player's name to see their paths"
-                , break 2
-                , comparePlayersView
-                , unfinishedPlayersView
-                , viewBestSegments playerList destTitles
-                , break 2
-                , singleRow <|
-                    if model.options.isHost then
-                        button [ onClick <| ClickedNewGame ] [ text "New Game" ]
-
-                    else
-                        text "Waiting on host to make a new game..."
-                ]
-
-        Bad msg ->
-            div [] [ text "There was a problem: ", text msg ]
+    Bad msg -> layout [] (el [Font.size 24] <| text ("There was a problem: " ++ msg))
