@@ -174,7 +174,7 @@ initialGameState destinations = case destinations of
 -}
 numSteps : GameState -> Int
 numSteps {previousLegs, currentLeg} =
-    let stepsInLeg leg = List.length (legToList leg)
+    let stepsInLeg leg = List.length leg.previousPages
     in stepsInLeg currentLeg + List.sum (List.map stepsInLeg previousLegs)
 
 strToSeed : String -> Random.Seed

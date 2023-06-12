@@ -17,8 +17,8 @@ type alias Page = {title : Title, content : Html.Parser.Node } -- TODO don't sto
 type alias PagePreview =
     { title : Title
     , thumbnail : Maybe {src : String, width : Float, height : Float}
-    , description : String      -- TODO make this Maybe
-    , shortdescription : String -- TODO make this Maybe
+    , description : Maybe String
+    , shortdescription : Maybe String
     }
 
 {-| sequence of steps made trying to reach a goal title

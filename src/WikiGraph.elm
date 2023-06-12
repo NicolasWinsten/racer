@@ -130,7 +130,7 @@ updateWikiGraph player source reached graph =
       |> \edge -> {edge | visitors=Set.insert player edge.visitors}
 
     -- update the set of loose end nodes if the player has landed on a new untouched page
-    newLooseEnd = case getNode reached graph of
+    newLooseEnds = Set.remove source <| case getNode reached graph of
       Just _ -> graph.looseEnds
       Nothing ->
         let isDestination = Tuple.first reached == Tuple.second reached
@@ -140,12 +140,8 @@ updateWikiGraph player source reached graph =
       playerLocations=Dict.insert player reached graph.playerLocations
       , nodes=updatedNode :: List.filter (.id >> (/=) reached) graph.nodes
       , edges=updatedEdge :: List.filter (\e -> (e.source, e.target) /= edgeId) graph.edges
-      , looseEnds=Dict.get player graph.playerLocations
-          |> Maybe.map (\node -> Set.remove node newLooseEnd)
-          |> Maybe.withDefault newLooseEnd
+      , looseEnds=newLooseEnds
     }
-
-type alias WikiGraphState = (WikiGraph, Force.State NodeId)
 
 {-| construct new force layout simulation for the graph
 -}
@@ -154,15 +150,30 @@ newSimulation graph =
   let
 
     dummyLinks = Set.toList graph.looseEnds
-      |> List.map (\(title, goal) -> ((title, goal), (goal, goal)))
+      |> List.map (\(title, goal) -> {
+        source=(title,goal),
+        target=(goal,goal),
+        distance=60,
+        strength=Nothing
+      })
 
-    link {source, target} = (source, target)
+    edgeLinks = graph.edges
+      |> List.map (\{source, target} -> {
+        source=source,
+        target=target,
+        distance=30,
+        strength=Nothing
+      })
 
     forces =
-      [ Force.links <| (dummyLinks ++ List.map link graph.edges)
+      [ Force.customLinks 1 <| dummyLinks ++ edgeLinks
       , Force.manyBody <| List.map .id graph.nodes
       ]
   in Force.iterations 300 (Force.simulation forces)
+
+
+
+type alias WikiGraphState = (WikiGraph, Force.State NodeId)
 
 {-| initialize the wikigraph with the destination list
 -}
@@ -247,7 +258,7 @@ coloredPath colors sourceX sourceY targetX targetY =
                 , y2 <| (toFloat i)*portionThickness + portionThickness/2
                 ]
                 []
-        dist = sqrt <| (sourceX-targetX)*(sourceX-targetX) + (sourceY-targetY)*(sourceY-targetY)
+        dist = sqrt <| (sourceX - targetX)*(sourceX - targetX) + (sourceY - targetY)*(sourceY - targetY)
         -- scale the path to match the distance between points
         scale = Scale (dist/100) 1
 
@@ -256,7 +267,7 @@ coloredPath colors sourceX sourceY targetX targetY =
         translate = Translate sourceX (sourceY - totalThickness/2)
 
         -- compute x,y vector from source to target point
-        (x_,y_) = (targetX-sourceX, targetY-sourceY)
+        (x_,y_) = (targetX - sourceX, targetY - sourceY)
         degrees = (atan2 y_ x_) * 180 / pi
         -- rotate the line to match vector from source to target
         rotation = Rotate degrees sourceX sourceY
@@ -309,7 +320,7 @@ svgDestinationNode {x,y,id} {thumbnail} =
               , strokeWidth 2
               ] 
               [TypedSvg.title [] [ text title ]]
-      in g [transform [Translate (x-size) (y-size)]] [TypedSvg.defs [] [bg], circ]
+      in g [transform [Translate (x - size) (y - size)]] [TypedSvg.defs [] [bg], circ]
     
     Nothing -> circle [cx x, cy y, r size, fill <| Paint <| Color.darkRed] [TypedSvg.title [] [ text title ]]
 

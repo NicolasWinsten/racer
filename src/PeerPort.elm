@@ -65,8 +65,8 @@ encodePagePreview {title, thumbnail, description, shortdescription} =
     Encode.object
         [ ("title", Encode.string title)
         , ("thumbnail", maybeEncode encodeThumbnail thumbnail)
-        , ("description", Encode.string description)
-        , ("shortdescription", Encode.string shortdescription)
+        , ("description", maybeEncode Encode.string description)
+        , ("shortdescription", maybeEncode Encode.string shortdescription)
         ]
 
 decodePagePreview : Decoder PagePreview
@@ -80,8 +80,8 @@ decodePagePreview =
         (\title thumbnail desc short -> {title=title, thumbnail=thumbnail, description=desc, shortdescription=short})
         (field "title" Decode.string)
         (Decode.maybe (field "thumbnail" thumbnailDecoder))
-        (field "description" Decode.string)
-        (field "shortdescription" Decode.string)
+        (Decode.maybe <| field "description" Decode.string)
+        (Decode.maybe <| field "shortdescription" Decode.string)
 
 encodeColor : Color -> Value
 encodeColor color =

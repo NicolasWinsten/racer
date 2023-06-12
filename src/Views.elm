@@ -14,6 +14,7 @@ import Model exposing (..)
 import Types exposing (..)
 import Parse exposing (viewNode)
 import List.Extra
+import Maybe.Extra
 import Colors.Opaque as EColor
 import Time
 import Either exposing (Either(..))
@@ -92,7 +93,8 @@ pagebreak = el
     ]
     none
 
-clipboard = image [width (px 20)] {src="assets/clippy.svg", description="copy lobby code to clipboard"}
+clipboard = image [width (px 20), basicToolTip onLeft "Copy to clipboard"]
+    {src="assets/clippy.svg", description="copy lobby code to clipboard"}
 
 {-| recursive list item for bulleted lists
 -}
@@ -106,29 +108,74 @@ viewLi (Li item children) =
         , column [ spacing 6, width fill] (item :: List.map viewLi children)
         ]
 
+{-| display some text when hovering over something
 
+Ex: el [tooltip above "Im a tooltip"] (text "Hover me")
+-}
+tooltip : (Element msg -> Attribute msg) -> Element Never -> Attribute msg
+tooltip usher content =
+    inFront <| el
+            [ width fill
+            , height fill
+            , transparent True
+            , mouseOver [ transparent False ]
+            , usher << Element.map never <|
+                el [htmlAttribute (Html.Attributes.style "pointerEvents" "none") ]
+                    content
+            ]
+            none
+
+basicToolTipStyle =
+    [ Background.color EColor.black
+    , Font.color EColor.white
+    , padding 4
+    , Border.rounded 5
+    , Font.size 14
+    , Border.shadow { offset = ( 0, 3 ), blur = 6, size = 0, color = rgba 0 0 0 0.32 }
+    ]
+
+
+basicToolTip : (Element msg -> Attribute msg) -> String -> Attribute msg
+basicToolTip usher content = tooltip usher (el basicToolTipStyle (text content))
+
+
+type DescOption = Short | Full | None
 {-| view a preview of a wikipedia article with its title, thumbnail, and description in a column
 -}
 viewPagePreview :
-    { showDesc : Bool
+    { showDesc : DescOption
     , showLabelAbove : Bool
     } -> PagePreview -> Element msg
-viewPagePreview {showDesc, showLabelAbove} {title, thumbnail, description} =
+viewPagePreview {showDesc, showLabelAbove} {title, thumbnail, description, shortdescription} =
     let
         previewImageWidth = 150
         img = Maybe.map (\{src} -> image [width (px previewImageWidth), centerX] {src=src, description=src}) thumbnail
             |> Maybe.withDefault none
-        
-        desc = paragraph [centerX] [text description]
+        desc =
+            let short = (Maybe.map Right shortdescription)
+                full = Maybe.Extra.or (Maybe.map Left description) short
+            in case showDesc of
+                Full -> full
+                Short -> short
+                None -> Nothing
 
         label = paragraph [Font.size 16, Font.center, Font.bold, width (minimum previewImageWidth fill), centerX] [text title]
 
         -- content = row [centerX] [img, desc]
-        content = if showDesc then
-                textColumn [centerX, Font.size 14] [el [alignLeft, padding 1] img, desc]
-            else
-                el [centerX] img
-    in column [spacing 5] <| if showLabelAbove then [ label, content ] else [ content, label ]
+        content = column [spacing 5] <| case desc of
+            Nothing -> if showLabelAbove then [label, img] else [img, label]
+            Just (Left fullDesc) ->
+                let imgPlusDesc = paragraph [centerX, Font.size 14] [el [alignLeft, padding 1] img, text fullDesc]
+                in if showLabelAbove then [label, imgPlusDesc] else [imgPlusDesc, label]
+            Just (Right shortdesc) ->
+                if showLabelAbove then [label, img, text shortdesc] else [img, label, text shortdesc]
+        
+        
+        -- if showDesc then
+        --         textColumn [centerX, Font.size 14] [el [alignLeft, padding 1] img, desc]
+        --     else
+        --         el [centerX] img
+    in content
 
 
 {-| render the player's colored name
@@ -178,7 +225,7 @@ viewWelcome options =
         displayPages = 
                 let (page1, page2) = options.displayPages
                     viewExampleTitle mpage = el [width (fillPortion 2)] <| case mpage of
-                        Just page -> el [alignBottom] <| viewPagePreview {showDesc=False, showLabelAbove=False} page
+                        Just page -> el [alignBottom] <| viewPagePreview {showDesc=None, showLabelAbove=False} page
                         Nothing -> el [centerY] spinner
                 in
                 row [spacing 20, centerX, alignBottom]
@@ -348,10 +395,16 @@ viewProgress game =
                         }
                     ]
         -- destination titles are bolded
-        viewDestinationTitle title = column [alignBottom]
-            [ displayPlayersAbove title
-            , el [Font.semiBold] (text title)
-            ]
+        viewDestinationTitle title =
+            let shortdescTip = basicToolTip below
+                    <| Maybe.withDefault "no description"
+                    <| Maybe.andThen .shortdescription 
+                    <| List.Extra.find (.title >> (==) title) game.destinations
+            in
+            column [alignBottom]
+                [ displayPlayersAbove title
+                , el [Font.semiBold, shortdescTip] (text title)
+                ]
 
     in List.Extra.init metDestinations
         |> Maybe.withDefault []
@@ -366,8 +419,9 @@ viewProgress game =
 {-| view a list of page previews as a column with arrows in between
 -}
 viewPagePreviews : List PagePreview -> Element msg
-viewPagePreviews previews = List.map (viewPagePreview {showLabelAbove=True, showDesc=True}) previews
-    |> List.intersperse (el [centerX] <| downarrow 64)
+viewPagePreviews previews = List.map (viewPagePreview {showLabelAbove=True, showDesc=Full}) previews
+    |> List.intersperse (downarrow 64)
+    |> List.map (el [centerX])
     |> column [spacing 10]
 
 {-| view the lobby code as the host,
@@ -453,8 +507,8 @@ viewLobby lobby opts =
             [ el [centerX, Font.size 32, Font.bold] (text "The Destinations") 
             , el [centerX] <| viewPagePreviews lobby.destinations
             ]
-        , column [ alignTop, alignRight, spacing 20 ]
-            [ if lobby.amHost then hostInputSection else text "Waiting for host to start game"
+        , column [ alignTop, alignRight, spacing 20, width fill ]
+            [ el [centerX] <| if lobby.amHost then hostInputSection else text "Waiting for host to start game"
             , pagebreak
             , el [Font.size 24, Font.bold, centerX] (text "Players")
             , playerList
@@ -509,12 +563,12 @@ bestLegsDisplay game =
                     [] -> none
 
             in row [width fill]
-                [ viewPagePreview {showLabelAbove=False, showDesc=False} start
+                [ viewPagePreview {showLabelAbove=False, showDesc=None} start
                 -- , column [width fill, centerY, spacing 10]
                 --     [ el [centerX, Font.bold] numSteps, el [width fill, centerY] legsView ]
                 , if List.isEmpty bestLegs then paragraph [Font.center] [text "Waiting for player to connect these titles..."]
                     else el [width fill, centerY, above <| el [Font.bold, centerX, padding 5] numSteps] legsView
-                , viewPagePreview {showLabelAbove=False, showDesc=False} goal
+                , viewPagePreview {showLabelAbove=False, showDesc=None} goal
                 ]
     in column [Font.size 14, spacing 25]
         <| List.intersperse pagebreak

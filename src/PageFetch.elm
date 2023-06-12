@@ -25,12 +25,7 @@ type alias PageHtml =
 type alias PageContent = Page
 type alias PageSummary = PagePreview
 
--- TODO use the requested title to make sure redirected titles are understood
--- TODO allow host to set the destinations manually
 -- TODO figure out how to retrieve the table of contents back
--- TODO figure out a way to customize the wikipedia content better
--- TODO remove the navbox at the bottom
--- TODO use d3 to draw a DAG of the player's paths instead of just listing them
 
 resolver : Decoder a -> Response String -> Result String a
 resolver decoder response = case response of
@@ -69,14 +64,18 @@ previewDecoder =
             (\source width height -> {src=source, width=width, height=height})
             (field "source" string)
             (field "width" Decode.float)    
-            (field "height" Decode.float)    
+            (field "height" Decode.float)
+        
+        nonNullString str = case String.trim str of
+            "" -> Nothing
+            chars -> Just chars
     in
     Decode.map4
         (\title thumbnail description shortdesc -> {title=title, thumbnail=thumbnail, description=description, shortdescription=shortdesc})
         (field "title" string)
         (Decode.maybe (field "thumbnail" thumbnailDecoder))
-        (Decode.map (Maybe.withDefault "") (Decode.maybe (field "extract" string)))
-        (Decode.map (Maybe.withDefault "") (Decode.maybe (field "description" string)))
+        (Decode.map (Maybe.andThen nonNullString) (Decode.maybe (field "extract" string)))
+        (Decode.map (Maybe.andThen nonNullString) (Decode.maybe (field "description" string)))
 
 {-| request the redirected title, thumbnail, and description of a wikipedia article
 -}
