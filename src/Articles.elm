@@ -1,4 +1,4 @@
-module Articles exposing (generateTitleList, titles)
+module Articles exposing (generateTitleList)
 
 import Array exposing (Array)
 import Random.Array
