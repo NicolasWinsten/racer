@@ -21,9 +21,10 @@
 </head>
 <body>
     <div id="app"></div>
-    <div class="m-3" style="text-align: right; font-style: italic; font-size: smaller;"> -- <a href="http://nicolaswinsten.com">Nicolas Winsten</a></div>
+    <div style="text-align: right; font-style: italic; font-size: smaller;"> -- <a href="http://nicolaswinsten.com">Nicolas Winsten</a></div>
     
-    <script src="assets/peerjs.min.js"></script>
+    <!-- <script src="assets/peerjs.min.js"></script> -->
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script src="racer.js"></script>
 
     <script>
@@ -63,7 +64,7 @@
         function constructPeer() {
             console.log("creating P2P agent");
 
-            const peerOptions = {debug : 2, serialization : "json", port : 443, secure : true };
+            const peerOptions = {debug : 2, port : 443, secure : true };
             console.log("peer options:", peerOptions);
             const peer = new Peer(null, peerOptions);
 
@@ -154,7 +155,7 @@
                 isHost = false
                 clearClientConnections()
 
-                hostConnection = peer.connect(host, {metadata : {name : name}})
+                hostConnection = peer.connect(host, {metadata : {name : name}, serialization : "json"})
                 hostConnection.on('open', () => {
                     console.log("host connection opened")
                     hostConnection.on('data', data => handleIncomingData(data, host));
