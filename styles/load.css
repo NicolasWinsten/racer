@@ -3446,12 +3446,6 @@ div.thumbinner {
       vertical-align: middle
   }
 
-  a {
-      text-decoration: none;
-      color: #3366cc;
-      background: none
-  }
-
   a:not([href]) {
       cursor: pointer
   }
@@ -3890,4 +3884,8 @@ div.thumbinner {
   ul {
       list-style-type: square
   }
+}
+
+.mw-parser-output {
+    font-size: 75%
 }

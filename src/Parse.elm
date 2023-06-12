@@ -26,6 +26,7 @@ viewNode n =
       attr2htmlattr (prop, val) = case prop of
           "src" -> attribute "src" (fixurls val)
           "srcset" -> attribute "srcset" (fixurls val)
+          "poster" -> attribute "poster" (fixurls val)
           _ -> attribute prop val
       
       -- make the straightforward conversion to Html object
@@ -41,7 +42,6 @@ viewNode n =
             -- TODO use regex insteead
               isUnwantedNamespace =
                   List.any (\ns -> String.startsWith ("/wiki/" ++ ns ++ ":") link) unwantedNamespaces
-                
               clickLink = String.dropLeft 6 >> decodeTitle >> Maybe.map ClickedLink >> Maybe.withDefault NoOp
           in
           if isUnwantedNamespace then
@@ -49,7 +49,13 @@ viewNode n =
               Html.a (List.map attr2htmlattr attrs) (List.map viewNode children)
 
           else if String.startsWith "/wiki/" link then
-              Html.a [ class "wikilink", href "#", onClick (clickLink link) ] (List.map viewNode children)
+              Html.a
+                [ Html.Attributes.style "color" "blue"
+                , Html.Attributes.style "text-decoration" "underline"
+                , href "#"
+                , onClick (clickLink link)
+                ]
+                (List.map viewNode children)
 
           else if String.startsWith "#" link then
               -- catch other inpage reference tags such as section navigators
@@ -67,8 +73,8 @@ viewNode n =
           text ""
 
       -- underline the section links in the contents navigator
-      Element "span" (( "class", "toctext" ) :: attrs) children ->
-          span (style "text-decoration" "underline" :: List.map attr2htmlattr attrs) (List.map viewNode children)
+    --   Element "span" (( "class", "toctext" ) :: attrs) children ->
+    --       span (style "text-decoration" "underline" :: List.map attr2htmlattr attrs) (List.map viewNode children)
 
       --ignore coordinates info for places
       Element "span" (( "id", "coordinates" ) :: _) _ ->

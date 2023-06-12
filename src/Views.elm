@@ -23,6 +23,7 @@ import Debug
 import Html
 import Loading
 import WikiGraph exposing (WikiGraphState)
+import Html.Events
 
 {-
    This is where I keep all the ugly view code
@@ -120,8 +121,9 @@ tooltip usher content =
             , transparent True
             , mouseOver [ transparent False ]
             , usher << Element.map never <|
-                el [htmlAttribute (Html.Attributes.style "pointerEvents" "none") ]
-                    content
+                el
+                [ htmlAttribute (Html.Attributes.style "pointerEvents" "none") ]
+                content
             ]
             none
 
@@ -335,8 +337,8 @@ titles in the current leg can be clicked on to return to.
 
 display players above the page they're currently on, so you'll know if they're on your tail or ahead of you.
 -}
-viewProgress : InProgressGame -> Element Msg
-viewProgress game =
+viewProgress : InProgressGame -> Page -> Bool -> Element Msg
+viewProgress game {sections} displayToc=
     let
         state = game.self.gameState
 
@@ -348,23 +350,8 @@ viewProgress game =
         currentLeg = legToList state.currentLeg
 
         -- has the player touched this title?
-        -- TODO we want to mark players above a title if they actually made that progress
-        -- right now this implementation will mark players ahead of you just if they've seen a destination page ahead
-        playerTouched title playerId = case Dict.get playerId game.players of
-            Just player -> List.member title (gameStateToList player.gameState)
-            Nothing -> False
-
-        playerIds = Dict.keys game.players
-
-        -- map each player with the title they should be displayed over
-        -- TODO player should appear above latest destination they've been to (even if they're not currently on it)
-        displayAbove titles = case titles of
-            (title :: rest) -> List.filter (playerTouched title) playerIds
-                |> List.map (\p -> (p, title))
-                |> Dict.fromList
-                |> Dict.union (displayAbove rest)
-            [] ->
-                Dict.empty
+        -- BUG: this will cause players to be displayed ahead of you even if they skipped ahead
+        playerTouched title player = List.member title (gameStateToList player.gameState)
         
         -- list of titles in display order
         -- we're displaying the previously met destinations, the current leg, and the unmet destinations 
@@ -372,23 +359,40 @@ viewProgress game =
             |> Maybe.withDefault []
             |> \metDests -> metDests ++ currentLeg ++ remainingDestinations
 
+        lastTitlePlayerTouched player = List.reverse titleList
+            |> List.Extra.find (\title -> playerTouched title player)
+
         -- render the players that should be displayed above some title
-        displayPlayersAbove title = displayAbove titleList
-            |> Dict.filter (\_ title_ -> title == title_)
-            |> Dict.keys
-            |> List.map (\uuid -> Dict.get uuid game.players)
-            |> List.filterMap identity
+        displayPlayersAbove title = Dict.values game.players
+            |> List.filter (\player -> lastTitlePlayerTouched player == Just title)
             |> List.map (\player -> viewPlayerName {hollow=not player.connected} player)
             |> List.intersperse (text " ")
             |> paragraph [Font.center, Font.size 14, width fill]
 
-        -- allow the user to click on any past title from the current leg to return back to it
+        -- table of contents section so that larger pages are easier to navigate
+        toc =
+            if displayToc then
+                List.filter (.level >> (==) 1) sections
+                    |> List.map (\{anchor} -> link [Font.underline, Font.size 14] {url="#"++anchor, label=text <| String.replace "_" " " anchor})
+                    |> column
+                        [ spacing 5
+                        , Border.widthEach {bottom=2, top=0, left=2, right=2}
+                        , Border.color EColor.darkgrey
+                        , Background.color (rgb255 208 210 196)
+                        --, onMouseLeave (DisplayToc False)
+                        , padding 5
+                        , moveRight 5
+                        ]
+            else none
+
         viewCurrentLegTitle title = el [alignBottom] <|
             if title == state.currentLeg.currentPage then
-                el [Font.size 32, Font.bold] (text title)
+                -- hovering the mouse over the current page header will display a table of contents for navigation
+                el [Font.size 32, Font.bold, onMouseEnter (DisplayToc True), below toc] (text title)
             else
                 column []
                     [ displayPlayersAbove title
+                    -- allow the user to click on any past title from the current leg to return back to it
                     , Input.button []
                         { onPress=Just (ClickedLink title)
                         , label=el [Font.light, htmlAttribute (Html.Attributes.class "hoverUnderline")] <| text title
@@ -685,12 +689,16 @@ view model = case model of
                 , htmlAttribute (Html.Attributes.style "z-index" "100") -- the wikipedia infobox elements were appearing above the progress bar
                 ]
                 <| row [width fill, spacing 10, padding 10]
-                    [ viewProgress game
+                    [ viewProgress game page opts.displayToc
                     , el [alignRight] timeDisplay
                     , el [alignRight] giveUpBtn
                     ]
 
-            articleContent = viewNode page.content
+            articleContent = Html.div
+                [ Html.Events.onMouseEnter (DisplayToc False) -- put the table of contents navigator away when mouse is back on page
+                , Html.Attributes.style "margin" "0 5%"
+                ]
+                [viewNode page.content]
 
             -- get all the players that are currently on the same page as you
             playersHere = Dict.values game.players

@@ -32,6 +32,7 @@ type Model
     | InGame (Either Title Page) InProgressGame
         { startTime : Time.Posix
         , currentTime : Time.Posix
+        , displayToc : Bool
         }
         WikiGraphState
     | PostGameReview InProgressGame WikiGraphState
@@ -69,9 +70,12 @@ type Msg
     | ReadyToStartGame Time.Posix
     | GiveUp
     | OnInputWelcomeParams { name : String, joinId : String }
+    -- host can adjust the the number of destinations while in lobby
     | OnInputLobbyParams { numDestinations : Int }
+    -- some ticks for updating the display pages and time display
     | Tick Time.Posix
     | UpdatedWikiGraph WikiGraphState
     | PeerMsg PeerMsg
-    | NoOp
     | CopyToClipboard String
+    | DisplayToc Bool
+    | NoOp

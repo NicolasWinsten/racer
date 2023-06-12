@@ -17,10 +17,8 @@ import Types exposing (..)
    This module provides functionality for fetching the content of wikipages
 -}
 
-
-
 type alias PageHtml =
-    { title : Title, html : String }
+    { title : Title, html : String, sections : List Section }
 
 type alias PageContent = Page
 type alias PageSummary = PagePreview
@@ -42,9 +40,15 @@ resolver decoder response = case response of
 pageDecoder : Decoder PageHtml
 pageDecoder =
     field "parse"
-        <| Decode.map2 PageHtml
+        <| Decode.map3 PageHtml
             (field "title" string)
-            (field "text" (field "*" string)) 
+            (field "text" (field "*" string))
+            (field "sections" (Decode.list tocSectionDecoder))
+
+tocSectionDecoder : Decoder Section
+tocSectionDecoder = Decode.map2 (\level anchor -> {level=level, anchor=anchor})
+    (field "toclevel" Decode.int)
+    (field "linkAnchor" Decode.string)
 
 requestPage : Title -> Task String PageHtml
 requestPage title =
@@ -103,11 +107,12 @@ getPage title =
 {-| convert the api parse result to a parsed Node
 -}
 content : PageHtml -> Result String PageContent
-content {title, html} =
+content {title, html, sections} =
     case Html.Parser.run Html.Parser.allCharRefs html of
         Ok (node :: _) -> Ok <|
             { title = title
             , content = node
+            , sections = sections
             }
         
         Ok [] -> Err "I parsed no html. This shouldn't happen"

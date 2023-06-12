@@ -9,9 +9,12 @@ import Dict exposing (Dict)
 -}
 type alias Title = String
 
+
+type alias Section = { level : Int, anchor : String}
+
 {-| loaded page that a user can view and click links on
 -}
-type alias Page = {title : Title, content : Html.Parser.Node } -- TODO don't store Node, store Html
+type alias Page = {title : Title, content : Html.Parser.Node, sections : List Section } -- TODO don't store Node, store Html
 
 
 type alias PagePreview =

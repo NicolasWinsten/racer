@@ -140,6 +140,7 @@ startGame game time =
     ( InGame (Left start) game
         { startTime=time
         , currentTime=time
+        , displayToc=False
         }
         (WikiGraph.init game.destinations)
     , Cmd.batch [ transition, startGameSignal, makeToast "Host started the game", startPageRequest ]
@@ -451,7 +452,7 @@ update msg model =
                 newGame opts = updateGameInfo opts game
                     |> Maybe.map
                         (\g -> let wikigraph = WikiGraph.init g.destinations in
-                            (InGame (Left start) g {startTime=Time.millisToPosix 0, currentTime=Time.millisToPosix 0} wikigraph, cmds)
+                            (InGame (Left start) g {startTime=Time.millisToPosix 0, currentTime=Time.millisToPosix 0, displayToc=False} wikigraph, cmds)
                         )
                     |> Maybe.withDefault (Bad "Could not find yourself in the game information", Cmd.none)
 
@@ -505,10 +506,17 @@ update msg model =
         
         CopyToClipboard str -> (model, copyToClipboard str)
 
+        -- received animation frame and ticked the wikigraph force sim
         UpdatedWikiGraph wikigraph -> case model of
             InGame page game opts _ -> (InGame page game opts wikigraph, Cmd.none)
             PostGameReview game _ -> (PostGameReview game wikigraph, Cmd.none)
             _ -> (Bad "Why are you receiving wikigraph tick?", Cmd.none)
+
+        DisplayToc toggle -> case model of
+            InGame page game opts wikigraph ->
+                (InGame page game {opts | displayToc=toggle} wikigraph, Cmd.none)
+            _ ->
+                (model, Cmd.none) 
 
 
 subscriptions : Model -> Sub Msg
