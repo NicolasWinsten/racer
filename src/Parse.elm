@@ -5,8 +5,9 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Regex
-import Model exposing (..)
+import Types exposing (..)
 import Helpers exposing (..)
+import Model exposing (..)
 
 {-| convert parsed html of wiki article for our purposes
 

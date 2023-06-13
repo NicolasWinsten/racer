@@ -4,7 +4,7 @@ import Time
 import Either exposing (Either(..))
 import Random exposing (Seed)
 import Types exposing (..)
-import WikiGraph exposing (WikiGraphState)
+import WikiGraph exposing (WikiGraphState, NodeId)
 
 {- Model and Msg types, along with some other helper types -}
 
@@ -37,6 +37,7 @@ type Model
         WikiGraphState
     | PostGameReview InProgressGame WikiGraphState
     | Bad String
+
 
 {-| types of messages sent to other players P2P
 -}
@@ -75,6 +76,7 @@ type Msg
     -- some ticks for updating the display pages and time display
     | Tick Time.Posix
     | UpdatedWikiGraph WikiGraphState
+    | HoverWikiGraphNode (Maybe NodeId)
     | PeerMsg PeerMsg
     | CopyToClipboard String
     | DisplayToc Bool

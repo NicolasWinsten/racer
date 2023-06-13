@@ -22,8 +22,9 @@ import Basics.Extra
 import Debug
 import Html
 import Loading
-import WikiGraph exposing (WikiGraphState)
 import Html.Events
+import WikiGraphView
+import WikiGraph
 
 {-
    This is where I keep all the ugly view code
@@ -363,11 +364,11 @@ viewProgress game {sections} displayToc=
             |> List.Extra.find (\title -> playerTouched title player)
 
         -- render the players that should be displayed above some title
+        -- TODO just display player color
         displayPlayersAbove title = Dict.values game.players
             |> List.filter (\player -> lastTitlePlayerTouched player == Just title)
-            |> List.map (\player -> viewPlayerName {hollow=not player.connected} player)
-            |> List.intersperse (text " ")
-            |> paragraph [Font.center, Font.size 14, width fill]
+            |> List.map (\{color} -> el [width fill, height fill, Background.color color] (text ""))
+            |> row [width fill, height (px 10)]
 
         -- table of contents section so that larger pages are easier to navigate
         toc =
@@ -388,9 +389,9 @@ viewProgress game {sections} displayToc=
         viewCurrentLegTitle title = el [alignBottom] <|
             if title == state.currentLeg.currentPage then
                 -- hovering the mouse over the current page header will display a table of contents for navigation
-                el [Font.size 32, Font.bold, onMouseEnter (DisplayToc True), below toc] (text title)
+                el [Font.size 24, Font.bold, onMouseEnter (DisplayToc True), below toc] (text title)
             else
-                column []
+                column [Font.size 16]
                     [ displayPlayersAbove title
                     -- allow the user to click on any past title from the current leg to return back to it
                     , Input.button []
@@ -405,7 +406,7 @@ viewProgress game {sections} displayToc=
                     <| Maybe.andThen .shortdescription 
                     <| List.Extra.find (.title >> (==) title) game.destinations
             in
-            column [alignBottom]
+            column [alignBottom, Font.size 16]
                 [ displayPlayersAbove title
                 , el [Font.semiBold, shortdescTip] (text title)
                 ]
@@ -416,7 +417,7 @@ viewProgress game {sections} displayToc=
             List.map viewDestinationTitle prevDests
             ++ List.map viewCurrentLegTitle currentLeg
             ++ List.map viewDestinationTitle remainingDestinations
-        |> List.intersperse (el [alignBottom] (rightarrow 24))
+        |> List.intersperse (el [alignBottom] (rightarrow 16))
         |> wrappedRow [width fill, spacingXY 0 10]
 
 
@@ -584,7 +585,7 @@ bestLegsDisplay game =
 when player finishes or gives up, enter the game review screen where
 they can view the leaderboards and the best wikiladders from the players
 -}
-viewPostGame : InProgressGame -> WikiGraphState -> Element Msg
+viewPostGame : InProgressGame -> WikiGraph.WikiGraphState -> Element Msg
 viewPostGame game wikigraph =
     let
         players = allPlayers game
@@ -645,7 +646,7 @@ viewPostGame game wikigraph =
             let playerColorMap = game.players
                     |> Dict.insert (Maybe.withDefault "" game.uuid) game.self
                     |> Dict.map (\_ {color} -> toRgb color )
-            in html <| WikiGraph.view wikigraph playerColorMap
+            in html <| WikiGraphView.view wikigraph playerColorMap
             
         newGameButton = Input.button buttonStyle {onPress=Just ClickedNewGame, label=text "New Game"}
 
@@ -653,7 +654,7 @@ viewPostGame game wikigraph =
         [ row [spaceEvenly, centerX]
             [ byTimeLeaderboard, byLengthLeaderboard]
         , el [width fill, Border.width 2] svgWikiGraph
-        , column [] [ el [Font.bold, centerX] (text "Best paths"), bestLegsDisplay game]
+        , column [spacing 10] [ el [Font.bold, centerX] (text "Best paths"), bestLegsDisplay game]
         , el [centerX] <| if game.amHost then newGameButton else (text "Waiting for host to start a new game...")
         ]
 
@@ -700,10 +701,13 @@ view model = case model of
                 ]
                 [viewNode page.content]
 
+            playerCurrentlyHere player = player.gameState.currentLeg.currentPage == page.title
             -- get all the players that are currently on the same page as you
             playersHere = Dict.values game.players
-                |> List.filter (\player -> player.gameState.currentLeg.currentPage == page.title)
+                |> List.filter playerCurrentlyHere
                 |> List.filter .connected
+                |> List.map 
+                    (\({name} as p) -> el [basicToolTip below (name ++ " is on this page")] <| viewPlayerName {hollow=False} p)
 
             -- get all the players that aren't here but previously were
             playersThatWereHere =
@@ -712,12 +716,13 @@ view model = case model of
                         |> List.member page.title
                 in Dict.values game.players
                     |> List.filter beenHere
-                    |> List.filter (not << \player -> List.member player playersHere )
+                    |> List.filter (not << playerCurrentlyHere)
+                    |> List.map
+                        (\({name} as p) -> el [basicToolTip below (name ++ " was on this page")] <| viewPlayerName {hollow=True} p)
 
             -- display the names of any players that have visited the page you're on
             playerList = layoutWith {options=[noStaticStyleSheet]} [] <| row [spacing 10, padding 10]
-                <| List.map (viewPlayerName {hollow=False}) playersHere
-                    ++ List.map (viewPlayerName {hollow=True}) playersThatWereHere
+                <| playersHere ++ playersThatWereHere
 
         in
         -- the wikipage article body using external styling, so mixing it in with Elm UI breaks it,

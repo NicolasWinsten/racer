@@ -1,4 +1,4 @@
-module WikiGraph exposing (WikiGraphState, update, subscription, init, view)
+module WikiGraph exposing (WikiGraph, WikiGraphState, Node, NodeId, Edge, update, subscription, init, Pos, setHighlightedNode)
 
 {-| A WikiGraph structure is kept to visualize the paths taken by the players.
 
@@ -16,14 +16,10 @@ import Helpers exposing (..)
 import Force
 import Browser.Events
 
-import Color
-import TypedSvg exposing (circle, g, line, svg, image)
-import TypedSvg.Attributes exposing (class, fill, stroke, viewBox, transform, target, id)
-import TypedSvg.Attributes.InPx exposing (cx, cy, r, strokeWidth, x1, x2, y1, y2, width, height)
-import TypedSvg.Core exposing (Svg, text, attribute)
-import TypedSvg.Types exposing (Paint(..), Transform(..))
-import TypedSvg.Attributes
+-- We also keep a wikigraph during gameplay in order to visualize the roots taken by the players
 
+{-| unique id for each node in the wikigraph
+-}
 type alias NodeId =
     ( Title    -- title of this node's page
     , Title    -- title of the destination trying to be reached from this node
@@ -33,9 +29,6 @@ type alias NodeId =
     )
 
 type alias Node = Force.Entity NodeId { visitors : Set PeerId }
-
-isDestinationNode : Node -> Bool
-isDestinationNode {id} = let (title, goal) = id in title == goal 
 
 -- edges are keyed by their source and target nodes
 type alias EdgeId = (NodeId, NodeId)
@@ -50,11 +43,18 @@ type alias WikiGraph =
   { nodes : List Node
   , edges : List Edge
   , looseEnds : Set NodeId                -- nodes at the tip of paths that aren't linked up to any destination
-  , destinations : List PagePreview             -- destination titles of the game
+  , destinations : List PagePreview       -- destination titles of the game
   , playerLocations : Dict PeerId NodeId  -- current locations of players
+  , highlightedNode : Maybe NodeId
   , width : Float
   , height : Float
   }
+
+-- use WikiGraphState in the model to track the force simulation state
+type alias WikiGraphState = (WikiGraph, Force.State NodeId)
+
+isDestinationNode : Node -> Bool
+isDestinationNode {id} = let (title, goal) = id in title == goal 
 
 getNode : NodeId -> WikiGraph -> Maybe Node
 getNode id graph = List.Extra.find (.id >> (==) id) graph.nodes
@@ -97,6 +97,7 @@ initWikiGraph dests =
           , looseEnds = Set.empty
           , destinations = dests
           , playerLocations = Dict.empty
+          , highlightedNode = Nothing
           , width = 1000
           , height = 500
           } 
@@ -116,7 +117,7 @@ updateWikiGraph player source reached graph =
     -- get the node that this player was last seen on
     lastPos = getNode source graph
       |> Maybe.map (\n -> {x=n.x, y=n.y})
-      |> Maybe.withDefault {x=0, y=0}
+      |> Maybe.withDefault {x=10, y=0}
       |> \pos ->
         let (noise, _) = Random.step (Random.float 0 1) (strToSeed player)
         in {x=pos.x+noise,y=pos.y+noise}  -- add a little noise so it doesn't break the force layout
@@ -154,7 +155,7 @@ newSimulation graph =
         source=(title,goal),
         target=(goal,goal),
         distance=60,
-        strength=Nothing
+        strength=Just 0.1
       })
 
     edgeLinks = graph.edges
@@ -169,11 +170,8 @@ newSimulation graph =
       [ Force.customLinks 1 <| dummyLinks ++ edgeLinks
       , Force.manyBody <| List.map .id graph.nodes
       ]
-  in Force.iterations 300 (Force.simulation forces)
+  in Force.iterations 500 (Force.simulation forces)
 
-
-
-type alias WikiGraphState = (WikiGraph, Force.State NodeId)
 
 {-| initialize the wikigraph with the destination list
 -}
@@ -224,134 +222,7 @@ subscription (graph, sim) =
     else Browser.Events.onAnimationFrame (\_ -> tickWikiGraphSim (graph, sim))
 
 
-type alias ColorMap = Dict PeerId Color.Color
-
-svgEdge : WikiGraph -> ColorMap -> Edge -> Svg msg
-svgEdge {nodes} colormap edge =
-  let
-      source = List.Extra.find (\n -> n.id == edge.source) nodes
-          |> Maybe.withDefault (newNode {x=0,y=0} ("",""))    -- will not happen
-
-      target = List.Extra.find (\n -> n.id == edge.target) nodes
-          |> Maybe.withDefault (newNode {x=0,y=0} ("",""))    -- will not happen
-
-      colors = Set.toList edge.visitors
-        |> List.filterMap (\player -> Dict.get player colormap)
-  in
-      coloredPath colors source.x source.y target.x target.y
-
-{-| Create a svg group that draws a colored line from one x,y point to another
-
--}
-coloredPath : List Color.Color -> Float -> Float -> Float -> Float -> Svg msg
-coloredPath colors sourceX sourceY targetX targetY =
-    let
-        portionThickness : Float
-        portionThickness = 3
-        mkLine i color =
-            line
-                [ strokeWidth portionThickness
-                , stroke <| Paint <| color
-                , x1 0
-                , y1 <| (toFloat i)*portionThickness + portionThickness/2
-                , x2 100
-                , y2 <| (toFloat i)*portionThickness + portionThickness/2
-                ]
-                []
-        dist = sqrt <| (sourceX - targetX)*(sourceX - targetX) + (sourceY - targetY)*(sourceY - targetY)
-        -- scale the path to match the distance between points
-        scale = Scale (dist/100) 1
-
-        totalThickness = (toFloat <| List.length colors)*portionThickness
-        -- start line at the source point
-        translate = Translate sourceX (sourceY - totalThickness/2)
-
-        -- compute x,y vector from source to target point
-        (x_,y_) = (targetX - sourceX, targetY - sourceY)
-        degrees = (atan2 y_ x_) * 180 / pi
-        -- rotate the line to match vector from source to target
-        rotation = Rotate degrees sourceX sourceY
-
-    in g [ class ["links"], transform [rotation, translate, scale] ]
-        <| List.indexedMap mkLine colors
 
 
-{-| render a destination node as its thumbnail in a circle
--}
-svgDestinationNode : Node -> PagePreview -> Svg msg
-svgDestinationNode {x,y,id} {thumbnail} = 
-  let (title, _) = id
-      idTitle = encodeTitle title
-        |> String.replace "(" "lp"
-          >> String.replace ")" "rp"
-          >> String.replace "%" "pc"
-      size = 10
-  in
-  case thumbnail of
-    Just picture ->
-      let
-          sizeAttr =
-            if picture.width > picture.height then
-              height (size*2)
-            else
-              width (size*2)
-          img = image
-            [ TypedSvg.Attributes.xlinkHref picture.src
-            , TypedSvg.Attributes.InPx.x 0
-            , TypedSvg.Attributes.InPx.y 0
-            --, height 50, width 50
-            , sizeAttr
-            ]
-            []
-
-          bg = TypedSvg.pattern
-            [ TypedSvg.Attributes.id <| idTitle ++ "-pattern"
-            --, TypedSvg.Attributes.InPx.x 0
-            --, TypedSvg.Attributes.InPx.y 0
-            , TypedSvg.Attributes.patternUnits TypedSvg.Types.CoordinateSystemUserSpaceOnUse
-            , height (size*2), width (size*2)
-            ]
-            [ img ]
-          
-          circ = circle
-              [ cx size, cy size, r size
-              , attribute "fill" <| "url(#" ++ idTitle ++ "-pattern)"
-              , stroke <| Paint Color.black
-              , strokeWidth 2
-              ] 
-              [TypedSvg.title [] [ text title ]]
-      in g [transform [Translate (x - size) (y - size)]] [TypedSvg.defs [] [bg], circ]
-    
-    Nothing -> circle [cx x, cy y, r size, fill <| Paint <| Color.darkRed] [TypedSvg.title [] [ text title ]]
-
-
-{-| draw a simple node circle
--}
-svgNode : Node -> Svg msg
-svgNode node = circle
-    [ r 2.5
-    , fill <| Paint Color.black
-    , stroke <| Paint <| Color.rgba 0 0 0 0
-    , strokeWidth 7
-    -- , onMouseDown node.id
-    , cx node.x
-    , cy node.y
-    ]
-    [ TypedSvg.title [] [ text <| Tuple.first node.id ] ]
-
-view : WikiGraphState -> Dict PeerId { red : Float, green : Float, blue : Float, alpha : Float} -> Svg msg
-view (graph, _) colors =
-    let
-        colormap = Dict.map (\_ {red,green,blue} -> Color.rgb red green blue) colors
-
-        mkNode node = case List.Extra.find (.title >> (==) (Tuple.first node.id)) graph.destinations of
-          Just preview -> svgDestinationNode node preview
-          Nothing -> svgNode node
-
-        nodeElements = graph.nodes
-            |> List.map mkNode
-            |> g [class ["nodes"]]
-        edgeGroups = graph.edges
-            |> List.map (svgEdge graph colormap)
-    in
-    svg [ viewBox 0 0 graph.width graph.height ] (edgeGroups ++ [nodeElements])
+setHighlightedNode : Maybe NodeId -> WikiGraphState -> WikiGraphState
+setHighlightedNode node (graph, sim) = ({graph | highlightedNode=node}, sim)

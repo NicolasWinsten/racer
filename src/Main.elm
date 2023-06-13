@@ -512,12 +512,19 @@ update msg model =
             PostGameReview game _ -> (PostGameReview game wikigraph, Cmd.none)
             _ -> (Bad "Why are you receiving wikigraph tick?", Cmd.none)
 
+        -- display the current page's content
         DisplayToc toggle -> case model of
             InGame page game opts wikigraph ->
                 (InGame page game {opts | displayToc=toggle} wikigraph, Cmd.none)
             _ ->
+                (model, Cmd.none)
+        
+        -- user mouse entered/left a node on the wikigraph display
+        HoverWikiGraphNode nodeId -> case model of
+            PostGameReview game wikigraph ->
+                (PostGameReview game (WikiGraph.setHighlightedNode nodeId wikigraph), Cmd.none)
+            _ ->
                 (model, Cmd.none) 
-
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
