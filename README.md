@@ -16,8 +16,10 @@ If there's something not working or you want to tell me why my code is bad, plea
 - [] Computer pathfinder in background to display in post-game review
 - [] Serialized trie of the title pool to reduce payload & memory consumption
 - [] Track total pages visited and total number of link clicks
-- [] add option to put on a time limit
-- [] add option to score by different metrics such as number of best paths found
 - [X] Display table of contents for easier page navigation
+- [] Display collapsible table of contents
 - [] Send P2P message on give up
 - [] add ElmUI snackbar for errors, other messages
+
+# Bugs
+- Late-joining players will have out-of-sync wikigraphs (solution: either disallow late-joiners or send the whole wikigraph to new player in gamestate info)

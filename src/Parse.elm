@@ -85,24 +85,24 @@ viewNode n =
           text ""
 
       -- hide boring headers
-      Element "span" (( "class", clazz ) :: ( "id", headline ) :: _) _ as header ->
-          if String.contains "mw-headline" clazz && List.member headline [ "Citations", "Notes", "References" ] then
-              text ""
+    --   Element "span" (( "class", clazz ) :: ( "id", headline ) :: _) _ as header ->
+    --       if String.contains "mw-headline" clazz && List.member headline [ "Citations", "Notes", "References" ] then
+    --           text ""
 
-          else
-              convert header
+    --       else
+    --           convert header
 
       -- hide references section
-      Element "div" (( "class", clazz ) :: _) _ as el ->
-          if String.startsWith "reflist" clazz then
-              text ""
+    --   Element "div" (( "class", clazz ) :: _) _ as el ->
+    --       if String.startsWith "reflist" clazz then
+    --           text ""
 
-          else
-              convert el
+    --       else
+    --           convert el
 
       -- hide superscript tags, they're citation links
-      Element "sup" _ _ ->
-          text ""
+    --   Element "sup" _ _ ->
+    --       text ""
 
       el ->
           convert el

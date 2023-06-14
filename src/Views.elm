@@ -25,6 +25,7 @@ import Loading
 import Html.Events
 import WikiGraphView
 import WikiGraph
+import Zoom exposing (Zoom)
 
 {-
    This is where I keep all the ugly view code
@@ -37,10 +38,6 @@ toCssString color =
     in String.concat <|
         "rgb(" :: List.intersperse "," rgb ++ [")"]
 
--- TODO use elm-ui instead
--- TODO add indicator when other players are on same page as you (and before you)
--- TODO allow navbar to indicate current position of peers
--- TODO allow previous titles in current leg to be clicked and returned to in navbar
 linkStyle = [Font.underline, Font.color EColor.blue]
 
 {-| tab out external link
@@ -338,7 +335,7 @@ titles in the current leg can be clicked on to return to.
 
 display players above the page they're currently on, so you'll know if they're on your tail or ahead of you.
 -}
-viewProgress : InProgressGame -> Page -> Bool -> Element Msg
+viewProgress : InProgressGame -> Page a -> Bool -> Element Msg
 viewProgress game {sections} displayToc=
     let
         state = game.self.gameState
@@ -350,23 +347,26 @@ viewProgress game {sections} displayToc=
         -- titles in the player's current leg (including the last destination they reached)
         currentLeg = legToList state.currentLeg
 
-        -- has the player touched this title?
-        -- BUG: this will cause players to be displayed ahead of you even if they skipped ahead
-        playerTouched title player = List.member title (gameStateToList player.gameState)
-        
         -- list of titles in display order
-        -- we're displaying the previously met destinations, the current leg, and the unmet destinations 
+        -- we're displaying the previously met destinations, the current leg, and the unmet destinations
+        -- depending on whether the title is a destination or part of the current leg, display them differently
         titleList = List.Extra.init metDestinations
             |> Maybe.withDefault []
-            |> \metDests -> metDests ++ currentLeg ++ remainingDestinations
+            |> \metDests -> List.map Right metDests ++ List.map Left currentLeg ++ List.map Right remainingDestinations
 
-        lastTitlePlayerTouched player = List.reverse titleList
-            |> List.Extra.find (\title -> playerTouched title player)
+        -- which title should the player be displayed over?
+        -- indicates their progress in the game
+        playersMarkedTitle player = List.reverse titleList
+            |> List.Extra.find (\t -> case t of
+                    Right dest -> List.member dest (getMetDestinations player.gameState)
+                    Left currTitle -> state.currentLeg.goal == player.gameState.currentLeg.goal
+                        && currTitle == player.gameState.currentLeg.currentPage
+                )
 
         -- render the players that should be displayed above some title
         -- TODO just display player color
         displayPlayersAbove title = Dict.values game.players
-            |> List.filter (\player -> lastTitlePlayerTouched player == Just title)
+            |> List.filter (\player -> playersMarkedTitle player == Just title)
             |> List.map (\{color} -> el [width fill, height fill, Background.color color] (text ""))
             |> row [width fill, height (px 10)]
 
@@ -380,43 +380,36 @@ viewProgress game {sections} displayToc=
                         , Border.widthEach {bottom=2, top=0, left=2, right=2}
                         , Border.color EColor.darkgrey
                         , Background.color (rgb255 208 210 196)
-                        --, onMouseLeave (DisplayToc False)
                         , padding 5
                         , moveRight 5
                         ]
             else none
 
-        viewCurrentLegTitle title = el [alignBottom] <|
+        viewCurrentLegTitle title =
             if title == state.currentLeg.currentPage then
                 -- hovering the mouse over the current page header will display a table of contents for navigation
                 el [Font.size 24, Font.bold, onMouseEnter (DisplayToc True), below toc] (text title)
             else
-                column [Font.size 16]
-                    [ displayPlayersAbove title
-                    -- allow the user to click on any past title from the current leg to return back to it
-                    , Input.button []
-                        { onPress=Just (ClickedLink title)
-                        , label=el [Font.light, htmlAttribute (Html.Attributes.class "hoverUnderline")] <| text title
-                        }
-                    ]
-        -- destination titles are bolded
+                -- allow the user to click on any past title from the current leg to return back to it
+                Input.button []
+                    { onPress=Just (ClickedLink title)
+                    , label=el [Font.light, htmlAttribute (Html.Attributes.class "hoverUnderline")] <| text title
+                    }
+
+        -- destination titles are bolded, with a 
         viewDestinationTitle title =
             let shortdescTip = basicToolTip below
                     <| Maybe.withDefault "no description"
                     <| Maybe.andThen .shortdescription 
                     <| List.Extra.find (.title >> (==) title) game.destinations
-            in
-            column [alignBottom, Font.size 16]
-                [ displayPlayersAbove title
-                , el [Font.semiBold, shortdescTip] (text title)
-                ]
+            in el [Font.semiBold, shortdescTip] (text title)
+        viewTitle title =
+            let displayTitle = case title of
+                    Right dest -> viewDestinationTitle dest
+                    Left currTitle -> viewCurrentLegTitle currTitle
+            in column [Font.size 16, alignBottom] [displayPlayersAbove title, displayTitle]
 
-    in List.Extra.init metDestinations
-        |> Maybe.withDefault []
-        |> \prevDests ->
-            List.map viewDestinationTitle prevDests
-            ++ List.map viewCurrentLegTitle currentLeg
-            ++ List.map viewDestinationTitle remainingDestinations
+    in List.map viewTitle titleList
         |> List.intersperse (el [alignBottom] (rightarrow 16))
         |> wrappedRow [width fill, spacingXY 0 10]
 
@@ -486,8 +479,9 @@ and the player list on the right side
 viewLobby : Lobby -> LobbyOpts -> Element Msg
 viewLobby lobby opts =
     let
+        doneLoading = List.length lobby.destinations == lobby.numDestinations
         startButton =
-            if List.length lobby.destinations == lobby.numDestinations then
+            if doneLoading then
                 Input.button buttonStyle { onPress=Just ClickedStartGame, label=text "Start game"}
             else
                 Input.button disabledButtonStyle { onPress=Nothing, label=text "Start game"}
@@ -509,7 +503,8 @@ viewLobby lobby opts =
     in
     row [width fill, padding 20, spacing 10, centerX]
         [ column [spacing 10, width fill]
-            [ el [centerX, Font.size 32, Font.bold] (text "The Destinations") 
+            [ el [centerX, Font.size 32, Font.bold] (text "The Destinations")
+            , el [centerX] (if doneLoading then none else spinner) 
             , el [centerX] <| viewPagePreviews lobby.destinations
             ]
         , column [ alignTop, alignRight, spacing 20, width fill ]
@@ -585,8 +580,8 @@ bestLegsDisplay game =
 when player finishes or gives up, enter the game review screen where
 they can view the leaderboards and the best wikiladders from the players
 -}
-viewPostGame : InProgressGame -> WikiGraph.WikiGraphState -> Element Msg
-viewPostGame game wikigraph =
+viewPostGame : InProgressGame -> WikiGraph.WikiGraphState -> Zoom -> Element Msg
+viewPostGame game wikigraph zoom =
     let
         players = allPlayers game
         finishedPlayers = List.filter (.gameState >> isGameFinished) players
@@ -646,15 +641,15 @@ viewPostGame game wikigraph =
             let playerColorMap = game.players
                     |> Dict.insert (Maybe.withDefault "" game.uuid) game.self
                     |> Dict.map (\_ {color} -> toRgb color )
-            in html <| WikiGraphView.view wikigraph playerColorMap
+            in html <| WikiGraphView.view wikigraph playerColorMap zoom
             
         newGameButton = Input.button buttonStyle {onPress=Just ClickedNewGame, label=text "New Game"}
 
     in column [centerX, spacing 15, padding 15]
         [ row [spaceEvenly, centerX]
             [ byTimeLeaderboard, byLengthLeaderboard]
-        , el [width fill, Border.width 2] svgWikiGraph
-        , column [spacing 10] [ el [Font.bold, centerX] (text "Best paths"), bestLegsDisplay game]
+        , el [centerX, Border.width 2] svgWikiGraph
+        , column [spacing 10, centerX] [ el [Font.bold, centerX] (text "Best paths"), bestLegsDisplay game]
         , el [centerX] <| if game.amHost then newGameButton else (text "Waiting for host to start a new game...")
         ]
 
@@ -699,7 +694,7 @@ view model = case model of
                 [ Html.Events.onMouseEnter (DisplayToc False) -- put the table of contents navigator away when mouse is back on page
                 , Html.Attributes.style "margin" "0 5%"
                 ]
-                [viewNode page.content]
+                [page.content]
 
             playerCurrentlyHere player = player.gameState.currentLeg.currentPage == page.title
             -- get all the players that are currently on the same page as you
@@ -732,6 +727,6 @@ view model = case model of
     InGame (Left title) _ _ _ -> layout [] <|
         el [padding 20] (text ("Fetching " ++ title ++ "..."))
 
-    PostGameReview game wikigraph -> layout [] (viewPostGame game wikigraph)
+    PostGameReview game wikigraph zoom -> layout [] (viewPostGame game wikigraph zoom)
 
     Bad msg -> layout [] (el [Font.size 24] <| text ("There was a problem: " ++ msg))

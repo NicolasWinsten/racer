@@ -1,4 +1,4 @@
-module WikiGraph exposing (WikiGraph, WikiGraphState, Node, NodeId, Edge, update, subscription, init, Pos, setHighlightedNode)
+module WikiGraph exposing (WikiGraph, WikiGraphState, Node, NodeId, Edge, update, subscription, init, Pos, width, height)
 
 {-| A WikiGraph structure is kept to visualize the paths taken by the players.
 
@@ -15,6 +15,11 @@ import Random
 import Helpers exposing (..)
 import Force
 import Browser.Events
+import Maybe.Extra
+
+-- node centroid will be placed in middle of these dimensions
+width = 1000
+height = 500
 
 -- We also keep a wikigraph during gameplay in order to visualize the roots taken by the players
 
@@ -42,12 +47,9 @@ type alias Edge =
 type alias WikiGraph =
   { nodes : List Node
   , edges : List Edge
-  , looseEnds : Set NodeId                -- nodes at the tip of paths that aren't linked up to any destination
+  , looseEnds : Dict PeerId NodeId        -- nodes at the tip of player paths that aren't linked up to any destination
   , destinations : List PagePreview       -- destination titles of the game
   , playerLocations : Dict PeerId NodeId  -- current locations of players
-  , highlightedNode : Maybe NodeId
-  , width : Float
-  , height : Float
   }
 
 -- use WikiGraphState in the model to track the force simulation state
@@ -77,7 +79,7 @@ newNode {x,y} id_ =
 
 -- preferred positions of the destination nodes
 preferredDestPositions : WikiGraph -> List Pos
-preferredDestPositions {width, height, destinations} =
+preferredDestPositions {destinations} =
     let
       numDests = List.length destinations
       gapSize = width / toFloat numDests
@@ -94,12 +96,9 @@ initWikiGraph dests =
         -- identify detination type nodes by keying them with -1 in the graph
         graph =
           { nodes = [], edges = []
-          , looseEnds = Set.empty
+          , looseEnds = Dict.empty
           , destinations = dests
           , playerLocations = Dict.empty
-          , highlightedNode = Nothing
-          , width = 1000
-          , height = 500
           } 
         destNodes = List.Extra.zip dests (preferredDestPositions graph)
           |> List.map (\({title}, pos) -> newNode pos (title, title))
@@ -122,41 +121,74 @@ updateWikiGraph player source reached graph =
         let (noise, _) = Random.step (Random.float 0 1) (strToSeed player)
         in {x=pos.x+noise,y=pos.y+noise}  -- add a little noise so it doesn't break the force layout
 
+    -- create a new node or update the existing node's visitor list
     updatedNode = getNode reached graph
       |> Maybe.withDefault (newNode lastPos reached)
       |> \node -> {node | visitors=Set.insert player node.visitors}
 
+    -- create a new edge or update the existing edge's visitor list
     updatedEdge = getEdge edgeId graph
       |> Maybe.withDefault {source=source, target=reached, visitors=Set.empty}
       |> \edge -> {edge | visitors=Set.insert player edge.visitors}
 
     -- update the set of loose end nodes if the player has landed on a new untouched page
-    newLooseEnds = Set.remove source <| case getNode reached graph of
-      Just _ -> graph.looseEnds
-      Nothing ->
-        let isDestination = Tuple.first reached == Tuple.second reached
-        in if isDestination then graph.looseEnds else Set.insert reached graph.looseEnds
+    newLooseEnds =
+      let isDestination = Tuple.first reached == Tuple.second reached
+      in
+      if isDestination then
+        Dict.remove player graph.looseEnds
+      else if Maybe.Extra.isNothing (getNode reached graph) then
+        Dict.insert player reached graph.looseEnds
+      else
+        graph.looseEnds
+    
   in
     { graph |
       playerLocations=Dict.insert player reached graph.playerLocations
-      , nodes=updatedNode :: List.filter (.id >> (/=) reached) graph.nodes
+      , nodes=List.filter (.id >> (/=) reached) graph.nodes
+          |> List.Extra.updateIf
+              (\{id} -> id == source)
+              (\sourceNode -> {sourceNode | visitors=Set.insert player sourceNode.visitors})
+          |> (::) updatedNode
       , edges=updatedEdge :: List.filter (\e -> (e.source, e.target) /= edgeId) graph.edges
       , looseEnds=newLooseEnds
     }
 
+mkDestinationDummyLinks : WikiGraph -> List EdgeId
+mkDestinationDummyLinks graph =
+    -- if we have destination nodes that nobody's reaching for,
+    -- then we need to add dummy links between that destination and the previous one,
+    -- so the destination nodes don't run off
+      let
+        -- if there's no nodes going for a destination then it needs a dummy link to hold it
+        isDangling destTitle = graph.nodes
+          |> List.any (\{id} -> let (title, goal) = id in title /= goal && goal == destTitle)
+          |> not
+      in window graph.destinations
+        |> List.filterMap
+          (\(d1, d2) ->
+            if isDangling d2.title then Just
+              ( (d1.title,d1.title)-- connect up the dangling destination node
+              , (d2.title,d2.title)-- with the destination before it
+              )
+            else Nothing
+          )
+
 {-| construct new force layout simulation for the graph
 -}
-newSimulation : WikiGraph -> Force.State NodeId
-newSimulation graph =
+newSimulation : Int -> WikiGraph -> Force.State NodeId
+newSimulation numIterations graph =
   let
-
-    dummyLinks = Set.toList graph.looseEnds
-      |> List.map (\(title, goal) -> {
+    -- we want the player's current node to be visually reaching for the next destination
+    -- so add dummy links between player nodes and their goal
+    dummyLinks = List.map
+      (\(title, goal) -> {
         source=(title,goal),
         target=(goal,goal),
         distance=60,
-        strength=Just 0.1
+        strength=Just 0.05
       })
+      (Dict.values graph.looseEnds)
 
     edgeLinks = graph.edges
       |> List.map (\{source, target} -> {
@@ -165,12 +197,22 @@ newSimulation graph =
         distance=30,
         strength=Nothing
       })
+    
+    -- have to link up destination nodes so they don't fly away
+    danglingDestLinks = mkDestinationDummyLinks graph
+      |> List.map (\(source, target) -> {
+        source=source,
+        target=target,
+        distance=30,
+        strength=Nothing
+      })
 
     forces =
-      [ Force.customLinks 1 <| dummyLinks ++ edgeLinks
+      [ Force.customLinks 1 <| danglingDestLinks ++ dummyLinks ++ edgeLinks
       , Force.manyBody <| List.map .id graph.nodes
+      , Force.center (width/2) (height/2)
       ]
-  in Force.iterations 500 (Force.simulation forces)
+  in Force.iterations numIterations (Force.simulation forces)
 
 
 {-| initialize the wikigraph with the destination list
@@ -178,12 +220,12 @@ newSimulation graph =
 init : List PagePreview -> WikiGraphState
 init destinations =
   let graph = initWikiGraph destinations
-  in (graph, newSimulation graph)
+  in (graph, newSimulation 10 graph)
 
 {-| update the wikigraph when a player moves from one title to another
 -}
-update : PeerId -> GameState -> WikiGraphState -> WikiGraphState
-update player {previousLegs, currentLeg} (wikigraph, sim) =
+update : PeerId -> GameState -> Int -> WikiGraphState -> WikiGraphState
+update player {previousLegs, currentLeg} numIterations (wikigraph, sim) =
     let
         -- each node is keyed by its title and the leg it was found on
         -- so we need to do some work to figure out the correct node ids
@@ -204,15 +246,27 @@ update player {previousLegs, currentLeg} (wikigraph, sim) =
     in case edge of
       Just (source, target) -> 
         let newGraph = updateWikiGraph player source target wikigraph
-        in (newGraph, newSimulation newGraph)
-      Nothing -> (wikigraph, sim)
+        in (newGraph, newSimulation numIterations newGraph)
+      Nothing ->
+          -- no new edge, but update player location because they're on a destination
+          ( {wikigraph | playerLocations=Dict.insert player (reachedTitle, reachedTitle) wikigraph.playerLocations}
+          , sim
+          )
 
 tickWikiGraphSim : WikiGraphState -> WikiGraphState
 tickWikiGraphSim (graph, sim) =
   let (newState, refinedNodes) = Force.tick sim graph.nodes
-      -- don't update the positions of the destination nodes to keep them fixed
-      destinations = List.filter isDestinationNode graph.nodes
-  in ({graph | nodes=destinations ++ List.filter (not << isDestinationNode) refinedNodes}, newState)
+      originalPos nodeId = List.Extra.find (\{id} -> id == nodeId) graph.nodes
+        |> Maybe.map (\{x,y} -> {x=x,y=y}) >> Maybe.withDefault {x=0, y=0}
+
+      newNodes = refinedNodes
+        |> List.Extra.updateIf isDestinationNode
+          (\({id} as n) ->
+            -- the destination nodes can slide along the x-axis to accommodate long player paths
+            -- otherwise they are fixed on the y-axis
+            let {y} = originalPos id in { n | y=y }
+          )
+  in ({graph | nodes=newNodes}, newState)
 
 {-| step through the force simulation and return an updated wikigraph
 -}
@@ -220,9 +274,3 @@ subscription : WikiGraphState -> Sub WikiGraphState
 subscription (graph, sim) =
     if Force.isCompleted sim then Sub.none
     else Browser.Events.onAnimationFrame (\_ -> tickWikiGraphSim (graph, sim))
-
-
-
-
-setHighlightedNode : Maybe NodeId -> WikiGraphState -> WikiGraphState
-setHighlightedNode node (graph, sim) = ({graph | highlightedNode=node}, sim)

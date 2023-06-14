@@ -16,6 +16,9 @@ import Articles
 import Either exposing (Either(..))
 import Random.List
 import WikiGraph
+import Zoom
+
+
 
 {-| retrieve the content of a wikipedia page along with the current time when it is loaded
 -}
@@ -48,11 +51,22 @@ goBackToTop : Cmd Msg
 goBackToTop =
     Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0)
 
+{-| number of rounds of force calculations to perform for wikigraph layout
+while in game
 
-transition : Cmd Msg
-transition =
-    Cmd.batch [ goBackToTop ]
+it is low so as to not effect gameplay
+-}
+forceItersWhileInGame = 50
 
+{-| number of rounds of force calculations to perform for wikigraph layout
+while in post game review
+-}
+forceItersPostGame = 1000
+
+
+--TODO put an extent on the zoom's scale and pan
+initZoom : Zoom.Zoom
+initZoom = Zoom.init {width=WikiGraph.width, height=WikiGraph.height}
 
 {-| create a bootstrap Toast with the given message
 -}
@@ -143,7 +157,7 @@ startGame game time =
         , displayToc=False
         }
         (WikiGraph.init game.destinations)
-    , Cmd.batch [ transition, startGameSignal, makeToast "Host started the game", startPageRequest ]
+    , Cmd.batch [ goBackToTop, startGameSignal, makeToast "Host started the game", startPageRequest ]
     )
 
 
@@ -237,18 +251,22 @@ update msg model =
                         Nothing -> Cmd.none
                     
                     cmd = Cmd.batch [signalTitleReached, goBackToTop]
-
-                    newWikiGraph = WikiGraph.update (Maybe.withDefault "" game.uuid) newGameState wikigraph
+                    
+                    newWikiGraph numForceIters =
+                        WikiGraph.update (Maybe.withDefault "" game.uuid) newGameState numForceIters wikigraph
                 in
                 if isGameFinished newGameState then
-                    ( PostGameReview { game | self={ self | gameState=newGameState } } newWikiGraph
+                    ( PostGameReview
+                        { game | self={ self | gameState=newGameState } }
+                        (newWikiGraph forceItersPostGame)
+                        initZoom
                     , cmd
                     )
                 else
                     ( InGame (Right page)
                         { game | self={ self | gameState=newGameState} }
                         { opts | currentTime=time }
-                        newWikiGraph
+                        (newWikiGraph forceItersWhileInGame) -- update the wikigraph force simulation a little bit in the background while in game
                     , cmd )
             _ -> (model, makeToast <| "loaded page " ++ page.title)
 
@@ -316,19 +334,14 @@ update msg model =
         -- update game state, update wikigraph (set new page as the player's current node)
         PeerMsg (PlayerReachedTitle uuid title time) ->
             let
-                -- take the player's gamestate, update it with the new title
-
-                -- updatePlayerList = Dict.update uuid
-                --     (Maybe.map (\player -> {player | gameState=newGameState player.gameState}))
-                
                 -- update the player state with the new title and update the wikigraph
-                updateGame game wikigraph = case Dict.get uuid game.players of
+                updateGame game wikigraph forceIters = case Dict.get uuid game.players of
                     Just player ->
                         let newPlayerState =
                                 let g = updateGameState title player.gameState
                                     finished = isGameFinished g
                                 in { g | finishTime=if finished then Just time else Nothing }
-                            newWikiGraph = WikiGraph.update uuid newPlayerState wikigraph
+                            newWikiGraph = WikiGraph.update uuid newPlayerState forceIters wikigraph
                         in
                         ( {game | players=Dict.insert uuid {player | gameState=newPlayerState} game.players}
                         , newWikiGraph
@@ -337,12 +350,12 @@ update msg model =
             in
             case model of
                 InGame page game opts wikigraph ->
-                    let (newGame, newWikiGraph) = updateGame game wikigraph
+                    let (newGame, newWikiGraph) = updateGame game wikigraph forceItersWhileInGame
                     in (InGame page newGame opts newWikiGraph, Cmd.none)
                     
-                PostGameReview game wikigraph ->
-                    let (newGame, newWikiGraph) = updateGame game wikigraph
-                    in (PostGameReview newGame newWikiGraph, Cmd.none)
+                PostGameReview game wikigraph zoom ->
+                    let (newGame, newWikiGraph) = updateGame game wikigraph forceItersPostGame
+                    in (PostGameReview newGame newWikiGraph zoom, Cmd.none)
                 
                 _ ->
                     (Bad "Received title from player when there is no current game...", Cmd.none)
@@ -398,8 +411,8 @@ update msg model =
                     Just newGame -> ( InGame page newGame opts wikigraph, Cmd.batch [sendGameInfo newGame, makeToast <| username ++ " joined the game"])
                     Nothing -> (Bad "Something went wrong updating the game with new player", Cmd.none)
                     
-                PostGameReview game wikigraph -> case updateGame game of
-                    Just newGame -> ( PostGameReview newGame wikigraph, Cmd.batch [sendGameInfo newGame, makeToast <| username ++ " joined the game"])
+                PostGameReview game wikigraph zoom -> case updateGame game of
+                    Just newGame -> ( PostGameReview newGame wikigraph zoom, Cmd.batch [sendGameInfo newGame, makeToast <| username ++ " joined the game"])
                     Nothing -> (Bad "Something went wrong updating the game with new player", Cmd.none)
 
                 _ ->
@@ -423,8 +436,8 @@ update msg model =
                     ( Lobby {lobby | players=Dict.remove uuid lobby.players} opts, toast lobby.players)
                 InGame page game opts wikigraph->
                     ( InGame page {game | players=updatePlayerList game.players} opts wikigraph, toast game.players)
-                PostGameReview game wikigraph ->
-                    ( PostGameReview {game | players=updatePlayerList game.players} wikigraph, toast game.players)
+                PostGameReview game wikigraph zoom ->
+                    ( PostGameReview {game | players=updatePlayerList game.players} wikigraph zoom, toast game.players)
                 _ ->  ( Bad "Peer disconnected while not in lobby/game", Cmd.none)
 
         PeerMsg HostLost ->
@@ -437,8 +450,8 @@ update msg model =
             in case model of
                 InGame page game opts wikigraph ->
                     (InGame page (newPlayerList game) opts wikigraph, toast)
-                PostGameReview game wikigraph ->
-                    (PostGameReview (newPlayerList game) wikigraph, toast)
+                PostGameReview game wikigraph zoom ->
+                    (PostGameReview (newPlayerList game) wikigraph zoom, toast)
                 Lobby lobby _ ->
                     (Welcome {inputJoinId="", inputName=lobby.self.name, seed=lobby.seed, uuid=lobby.uuid, displayPages=(Nothing, Nothing)}, toast)
                 _ -> (model, toast)
@@ -472,18 +485,18 @@ update msg model =
                 Welcome opts -> (newGame opts, makeToast "You joined the lobby")
                 Lobby opts _ -> (newGame opts, makeToast "Destination pages changed")
                 InGame _ opts _ _ -> (newGame opts, makeToast "Host wants a new game")
-                PostGameReview opts _ -> (newGame opts, makeToast "Host wants a new game")
+                PostGameReview opts _ _ -> (newGame opts, makeToast "Host wants a new game")
                 _ -> (Bad "Why are you receiving lobby invitation?", Cmd.none)
 
         PeerMsg (Error err) ->
             ( model, makeToast <| "P2P error: " ++ err )
 
         GiveUp -> case model of
-            InGame _ game _ wikigraph -> (PostGameReview game wikigraph, Cmd.none)
+            InGame _ game _ wikigraph -> (PostGameReview game wikigraph initZoom, Cmd.none)
             _ -> (Bad "You can't give up! You're not even playing", Cmd.none)
 
         ClickedNewGame -> case model of
-            PostGameReview game _ -> 
+            PostGameReview game _ _ -> 
                 if game.amHost then
                     let
                         lobby =
@@ -509,7 +522,7 @@ update msg model =
         -- received animation frame and ticked the wikigraph force sim
         UpdatedWikiGraph wikigraph -> case model of
             InGame page game opts _ -> (InGame page game opts wikigraph, Cmd.none)
-            PostGameReview game _ -> (PostGameReview game wikigraph, Cmd.none)
+            PostGameReview game _ zoom -> (PostGameReview game wikigraph zoom, Cmd.none)
             _ -> (Bad "Why are you receiving wikigraph tick?", Cmd.none)
 
         -- display the current page's content
@@ -520,11 +533,16 @@ update msg model =
                 (model, Cmd.none)
         
         -- user mouse entered/left a node on the wikigraph display
-        HoverWikiGraphNode nodeId -> case model of
-            PostGameReview game wikigraph ->
-                (PostGameReview game (WikiGraph.setHighlightedNode nodeId wikigraph), Cmd.none)
+        HoverWikiGraphNode nodeId ->
+            (model, Cmd.none)
+            -- TODO maybe display a page preview in the wikigraph svg: https://developer.mozilla.org/en-US/docs/Web/SVG/Element/foreignObject
+
+        -- user is 
+        ZoomPan zoomMsg -> case model of
+            PostGameReview game wikigraph zoom ->
+                (PostGameReview game wikigraph (Zoom.update zoomMsg zoom), Cmd.none)
             _ ->
-                (model, Cmd.none) 
+                (model, Cmd.none)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -536,8 +554,8 @@ subscriptions model =
     -- ticks while in game to update the time display
     InGame _ _ _ wikigraph ->
         Sub.batch [ Time.every 1000 Tick, PeerPort.receiveData, wikiGraphSimulationTicker wikigraph ]
-    PostGameReview _ wikigraph ->
-        Sub.batch [PeerPort.receiveData, wikiGraphSimulationTicker wikigraph]
+    PostGameReview _ wikigraph zoom ->
+        Sub.batch [PeerPort.receiveData, wikiGraphSimulationTicker wikigraph, Zoom.subscriptions zoom ZoomPan]
     _ -> PeerPort.receiveData
 
 

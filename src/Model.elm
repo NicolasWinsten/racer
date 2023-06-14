@@ -5,6 +5,7 @@ import Either exposing (Either(..))
 import Random exposing (Seed)
 import Types exposing (..)
 import WikiGraph exposing (WikiGraphState, NodeId)
+import Zoom
 
 {- Model and Msg types, along with some other helper types -}
 
@@ -29,13 +30,13 @@ type Model
     -- host can reroll for new destinations or change the number of destinations
     | Lobby Lobby LobbyOpts
     -- user is currently in game and viewing a wikipedia article
-    | InGame (Either Title Page) InProgressGame
+    | InGame (Either Title (Page Msg)) InProgressGame
         { startTime : Time.Posix
         , currentTime : Time.Posix
         , displayToc : Bool
         }
         WikiGraphState
-    | PostGameReview InProgressGame WikiGraphState
+    | PostGameReview InProgressGame WikiGraphState Zoom.Zoom
     | Bad String
 
 
@@ -59,7 +60,7 @@ type PeerMsg
     | Error String  -- error with peerJS
 
 type Msg
-    = LoadedPage Title (Result String Page) Time.Posix -- requested title, content node of that page
+    = LoadedPage Title (Result String (Page Msg)) Time.Posix -- requested title, content node of that page
     | LoadedDestinationPreview Title (Result String PagePreview)
     | LoadedWelcomePreview (Result String PagePreview)
     | ClickedLink Title
@@ -76,8 +77,9 @@ type Msg
     -- some ticks for updating the display pages and time display
     | Tick Time.Posix
     | UpdatedWikiGraph WikiGraphState
-    | HoverWikiGraphNode (Maybe NodeId)
+    | HoverWikiGraphNode (Maybe NodeId) -- currently unused
     | PeerMsg PeerMsg
     | CopyToClipboard String
     | DisplayToc Bool
+    | ZoomPan Zoom.OnZoom
     | NoOp

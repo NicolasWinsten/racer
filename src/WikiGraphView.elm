@@ -8,23 +8,29 @@ import Helpers exposing (encodeTitle)
 import Set
 import WikiGraph exposing (..)
 
-import TypedSvg exposing (circle, g, line, svg, image)
-import TypedSvg.Attributes exposing (class, fill, stroke, viewBox, transform, target, id)
-import TypedSvg.Attributes.InPx exposing (cx, cy, r, strokeWidth, x1, x2, y1, y2, width, height)
+import TypedSvg exposing (circle, rect, g, line, svg, image)
+import TypedSvg.Attributes as A
+import TypedSvg.Attributes.InPx as AInPx
 import TypedSvg.Core exposing (Svg, text, attribute)
 import TypedSvg.Types exposing (Paint(..), Transform(..))
-import TypedSvg.Attributes
 import Dict.Extra
 import Html.Events exposing (onMouseEnter)
 import Html.Events exposing (onMouseLeave)
 import Maybe.Extra
-import Html
-import Html.Attributes
 import TypedSvg.Types exposing (FontWeight(..))
 import Model exposing (Msg(..))
-
+import Zoom exposing (Zoom)
 
 type alias ColorMap = Dict PeerId Color.Color
+
+{-| set the alpha channel of a color
+-}
+setAlpha : Float -> Color.Color -> Color.Color
+setAlpha a color =
+  let {red,green,blue} = Color.toRgba color
+  in Color.rgba red green blue a
+
+hideAlpha = 0.3
 
 {-| for each edge in the wikigraph, color it according to all the players that have used it
 -}
@@ -54,12 +60,12 @@ coloredPath colors sourceX sourceY targetX targetY =
         portionThickness = 3
         mkLine i color =
             line
-                [ strokeWidth portionThickness
-                , stroke <| Paint <| color
-                , x1 0
-                , y1 <| (toFloat i)*portionThickness + portionThickness/2
-                , x2 100
-                , y2 <| (toFloat i)*portionThickness + portionThickness/2
+                [ AInPx.strokeWidth portionThickness
+                , A.stroke <| Paint <| color
+                , AInPx.x1 0
+                , AInPx.y1 <| (toFloat i)*portionThickness + portionThickness/2
+                , AInPx.x2 100
+                , AInPx.y2 <| (toFloat i)*portionThickness + portionThickness/2
                 ]
                 []
         dist = sqrt <| (sourceX - targetX)*(sourceX - targetX) + (sourceY - targetY)*(sourceY - targetY)
@@ -76,7 +82,7 @@ coloredPath colors sourceX sourceY targetX targetY =
         -- rotate the line to match vector from source to target
         rotation = Rotate degrees sourceX sourceY
 
-    in g [ class ["links"], transform [rotation, translate, scale] ]
+    in g [ A.class ["links"], A.transform [rotation, translate, scale] ]
         <| List.indexedMap mkLine colors
 
 
@@ -90,33 +96,33 @@ mkPictureNode {url, width, height} {x,y} radius title =
           >> String.replace "%" "pc"
       sizeAttr =
         if width > height then
-          TypedSvg.Attributes.InPx.height (radius*2)
+          AInPx.height (radius*2)
         else
-          TypedSvg.Attributes.InPx.width (radius*2)
+          AInPx.width (radius*2)
       img = image
-        [ TypedSvg.Attributes.href url
-        , TypedSvg.Attributes.InPx.x 0
-        , TypedSvg.Attributes.InPx.y 0
+        [ A.href url
+        , AInPx.x 0
+        , AInPx.y 0
         , sizeAttr
         ]
         []
 
       bg = TypedSvg.pattern
-        [ TypedSvg.Attributes.id <| id ++ "-pattern"
-        , TypedSvg.Attributes.patternUnits TypedSvg.Types.CoordinateSystemUserSpaceOnUse
-        , TypedSvg.Attributes.InPx.height (radius*2)
-        , TypedSvg.Attributes.InPx.width (radius*2)
+        [ A.id <| id ++ "-pattern"
+        , A.patternUnits TypedSvg.Types.CoordinateSystemUserSpaceOnUse
+        , AInPx.height (radius*2)
+        , AInPx.width (radius*2)
         ]
         [ img ]
       
       circ = circle
-          [ cx radius, cy radius, r radius
+          [ AInPx.cx radius, AInPx.cy radius, AInPx.r radius
           , attribute "fill" <| "url(#" ++ id ++ "-pattern)"
-          , stroke <| Paint Color.black
-          , strokeWidth 2
+          , A.stroke <| Paint Color.black
+          , AInPx.strokeWidth 2
           ] 
           []
-    in g [transform [Translate (x - radius) (y - radius)]] [TypedSvg.defs [] [bg], circ]
+    in g [A.transform [Translate (x - radius) (y - radius)]] [TypedSvg.defs [] [bg], circ]
 
 
 {-| draw a simple node circle, color it according to any players currently on it
@@ -129,7 +135,6 @@ svgNode wikigraph colormap node =
 
       fillcolor = Maybe.withDefault Color.black playercolor
 
-      isHighlighted = wikigraph.highlightedNode == Just node.id
       playerIsHere = Maybe.Extra.isJust playercolor
 
       destinationPreview =
@@ -145,7 +150,7 @@ svgNode wikigraph colormap node =
       -- rotate the label for easier reading and then place it at the node
       -- TODO we could link a dangling dummy node to each node, and the edge's force-directed layout becomes the label's layout!
       labelTransform =
-        if node.y <= (wikigraph.height/2) then
+        if node.y <= (WikiGraph.height/2) then
           [Translate node.x (node.y - (radius+3)), Rotate -55 0 0]
         else
           -- if the node is on the bottom side of the graph then draw the labels going down
@@ -158,13 +163,11 @@ svgNode wikigraph colormap node =
       labelText = -- TODO add option to highlight and display titles of particular player
         if True then
           TypedSvg.text_
-          [ --TypedSvg.Attributes.InPx.x node.x
-          --, TypedSvg.Attributes.InPx.y node.y
-          TypedSvg.Attributes.fontFamily ["sans-serif"]
-          , TypedSvg.Attributes.InPx.fontSize 10
-          , transform labelTransform
-          , TypedSvg.Attributes.pointerEvents "none"
-          , TypedSvg.Attributes.fontWeight
+          [ A.fontFamily ["sans-serif"]
+          , AInPx.fontSize 10
+          , A.transform labelTransform
+          , A.pointerEvents "none"
+          , A.fontWeight
               <| if isDestination then FontWeightBold else FontWeightNormal
           ]
           [text nodeTitle]
@@ -176,34 +179,51 @@ svgNode wikigraph colormap node =
           mkPictureNode {url=src, width=width, height=height} {x=node.x, y=node.y} radius nodeTitle
         Nothing ->
           circle
-            [ r radius
-            , fill <| Paint fillcolor
-            , cx node.x
-            , cy node.y
-            , onMouseEnter (HoverWikiGraphNode <| Just node.id)
-            --, onMouseLeave (HoverWikiGraphNode Nothing)
+            [ AInPx.r radius
+            , A.fill <| Paint fillcolor
+            , AInPx.cx node.x
+            , AInPx.cy node.y
+            , onMouseEnter (HoverWikiGraphNode <| Just node.id) -- TODO hovering over node highlights that player's path
+            , onMouseLeave (HoverWikiGraphNode Nothing)
             ]
             [ TypedSvg.title [] [ text <| Tuple.first node.id ]]
 
       link = TypedSvg.a
-        [ TypedSvg.Attributes.href ("https://en.wikipedia.org/wiki/" ++ encodeTitle nodeTitle)
-        , TypedSvg.Attributes.target "_blank"
+        [ A.href ("https://en.wikipedia.org/wiki/" ++ encodeTitle nodeTitle)
+        , A.target "_blank"
         ]
 
-  in g [class ["node"]]
+  in g [A.class ["node"]]
     [ link [nodeCircle]
     , labelText
     ]
 
-view : WikiGraphState -> Dict PeerId { red : Float, green : Float, blue : Float, alpha : Float} -> Svg Msg
-view (graph, _) colors =
+view : WikiGraphState -> Dict PeerId { red : Float, green : Float, blue : Float, alpha : Float} -> Zoom -> Svg Msg
+view (graph, _) colors zoom =
     let
         colormap = Dict.map (\_ {red,green,blue} -> Color.rgb red green blue) colors
 
         nodeElements = graph.nodes
             |> List.map (svgNode graph colormap)
-            |> g [class ["nodes"]]
+            |> g [A.class ["nodes"]]
         edgeGroups = graph.edges
             |> List.map (svgEdge graph colormap)
     in
-    svg [ viewBox 0 0 graph.width graph.height ] (edgeGroups ++ [nodeElements])
+    -- the svg element has fixed dimensions
+    -- if we want it to be resizable then we would need to update the Zoom with the new dimensions
+    -- by subscribing to OnResize and 
+    svg
+      [ AInPx.width WikiGraph.width
+      , AInPx.height WikiGraph.height
+      ] --[viewBox 0 0 WikiGraph.width WikiGraph.height]
+      [ rect
+        ([ A.width <| TypedSvg.Types.Percent 100
+        , A.height <| TypedSvg.Types.Percent 100
+        , A.fill <| Paint <| Color.rgb255 235 236 229
+        ]
+          ++ Zoom.events zoom ZoomPan -- dragging and mousewheel are registered on background rect
+        )
+        []
+        -- the actual zoom and pan transforms are done on the drawn content
+      , g [Zoom.transform zoom] (edgeGroups ++ [nodeElements])
+      ]

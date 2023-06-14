@@ -12,6 +12,8 @@ import Parser
 import Result
 import Task exposing (Task)
 import Types exposing (..)
+import Model exposing (Msg)
+import Parse
 
 {-
    This module provides functionality for fetching the content of wikipages
@@ -20,7 +22,7 @@ import Types exposing (..)
 type alias PageHtml =
     { title : Title, html : String, sections : List Section }
 
-type alias PageContent = Page
+type alias PageContent a = Page a
 type alias PageSummary = PagePreview
 
 -- TODO figure out how to retrieve the table of contents back
@@ -94,7 +96,7 @@ getPreview title = Http.task
         }
 
 {-|retrieve the and parse the HTML of the given wikipedia article -}
-getPage : Title -> Task String PageContent
+getPage : Title -> Task String (PageContent Msg)
 getPage title =
     requestPage title
         |> Task.andThen
@@ -106,12 +108,12 @@ getPage title =
 
 {-| convert the api parse result to a parsed Node
 -}
-content : PageHtml -> Result String PageContent
+content : PageHtml -> Result String (PageContent Msg)
 content {title, html, sections} =
     case Html.Parser.run Html.Parser.allCharRefs html of
         Ok (node :: _) -> Ok <|
             { title = title
-            , content = node
+            , content = Parse.viewNode node
             , sections = sections
             }
         

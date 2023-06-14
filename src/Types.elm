@@ -1,10 +1,10 @@
 module Types exposing (..)
 
 import Element exposing (Color)
-import Html.Parser
 import Random exposing (Seed)
 import Dict exposing (Dict)
 import List.Extra
+import Html exposing (Html)
 
 {-| wikipedia page article title
 -}
@@ -15,7 +15,7 @@ type alias Section = { level : Int, anchor : String}
 
 {-| loaded page that a user can view and click links on
 -}
-type alias Page = {title : Title, content : Html.Parser.Node, sections : List Section } -- TODO don't store Node, store Html
+type alias Page msg = {title : Title, content : Html msg, sections : List Section } -- TODO don't store Node, store Html
 
 
 type alias PagePreview =
@@ -147,6 +147,13 @@ gameStateToList game =
         |> List.reverse
         |> List.concatMap legToList
         |> removeAdjacentDupes
+
+{-| return the destinations that have been reached
+-}
+getMetDestinations : GameState -> List Title
+getMetDestinations ({previousLegs, currentLeg} as game) = currentLeg :: previousLegs
+    |> List.map (\leg -> let (start, _, _) = legParts leg in start)
+    |> (++) (if isGameFinished game then [currentLeg.currentPage] else [])
 
 {-| return a list of the completed legs (paths between two destinations) from a player's game
 -}
