@@ -5,6 +5,7 @@ import Random exposing (Seed)
 import Dict exposing (Dict)
 import List.Extra
 import Html exposing (Html)
+import Either exposing (Either(..))
 
 {-| wikipedia page article title
 -}
@@ -37,6 +38,27 @@ type alias GameState =
     , remainingDestinations : List Title
     , finishTime : Maybe Int  -- number of milliseconds taken to finish the game
     }
+
+-- TODO better model:
+{-
+type CompletedLeg = (Title, List Title, Title)
+
+type InCompleteLeg = {previousPages : List Title, currentPage : Title, goal : Title}
+
+type alias IncompleteGame =
+    { previousLegs : List CompletedLeg
+    , currentLeg : IncompleteLeg
+    , remainingDestinations : List Title
+    }
+
+type alias CompleteGame = { legs : List CompletedLeg, finishTime : Int }
+
+type GameState
+    = Finished CompleteGame
+    | UnFinished IncompleteGame
+    | DNF IncompleteGame Int (time)
+
+-}
 
 {-| each player has a unique id
 -}
@@ -127,6 +149,7 @@ legToList leg = leg.currentPage :: leg.previousPages |> List.reverse
 
 {-| deconstruct the leg into its starting title, the destination title,
 and the list of titles in between connecting them
+
 -}
 legParts : Leg -> (Title, List Title, Title)
 legParts {previousPages, currentPage, goal} = case List.reverse previousPages of

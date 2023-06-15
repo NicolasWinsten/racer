@@ -16,7 +16,7 @@ import Articles
 import Either exposing (Either(..))
 import Random.List
 import WikiGraph
-import Zoom
+
 
 
 
@@ -62,11 +62,6 @@ forceItersWhileInGame = 100
 while in post game review
 -}
 forceItersPostGame = 1000
-
-
---TODO put an extent on the zoom's scale and pan
-initZoom : Zoom.Zoom
-initZoom = Zoom.init {width=WikiGraph.width, height=WikiGraph.height}
 
 {-| create a bootstrap Toast with the given message
 -}
@@ -259,7 +254,6 @@ update msg model =
                     ( PostGameReview
                         { game | self={ self | gameState=newGameState } }
                         (newWikiGraph forceItersPostGame)
-                        initZoom
                     , cmd
                     )
                 else
@@ -353,9 +347,9 @@ update msg model =
                     let (newGame, newWikiGraph) = updateGame game wikigraph forceItersWhileInGame
                     in (InGame page newGame opts newWikiGraph, Cmd.none)
                     
-                PostGameReview game wikigraph zoom ->
+                PostGameReview game wikigraph ->
                     let (newGame, newWikiGraph) = updateGame game wikigraph forceItersPostGame
-                    in (PostGameReview newGame newWikiGraph zoom, Cmd.none)
+                    in (PostGameReview newGame newWikiGraph, Cmd.none)
                 
                 _ ->
                     (Bad "Received title from player when there is no current game...", Cmd.none)
@@ -411,8 +405,8 @@ update msg model =
                     Just newGame -> ( InGame page newGame opts wikigraph, Cmd.batch [sendGameInfo newGame, makeToast <| username ++ " joined the game"])
                     Nothing -> (Bad "Something went wrong updating the game with new player", Cmd.none)
                     
-                PostGameReview game wikigraph zoom -> case updateGame game of
-                    Just newGame -> ( PostGameReview newGame wikigraph zoom, Cmd.batch [sendGameInfo newGame, makeToast <| username ++ " joined the game"])
+                PostGameReview game wikigraph-> case updateGame game of
+                    Just newGame -> ( PostGameReview newGame wikigraph, Cmd.batch [sendGameInfo newGame, makeToast <| username ++ " joined the game"])
                     Nothing -> (Bad "Something went wrong updating the game with new player", Cmd.none)
 
                 _ ->
@@ -436,8 +430,8 @@ update msg model =
                     ( Lobby {lobby | players=Dict.remove uuid lobby.players} opts, toast lobby.players)
                 InGame page game opts wikigraph->
                     ( InGame page {game | players=updatePlayerList game.players} opts wikigraph, toast game.players)
-                PostGameReview game wikigraph zoom ->
-                    ( PostGameReview {game | players=updatePlayerList game.players} wikigraph zoom, toast game.players)
+                PostGameReview game wikigraph ->
+                    ( PostGameReview {game | players=updatePlayerList game.players} wikigraph, toast game.players)
                 _ ->  ( Bad "Peer disconnected while not in lobby/game", Cmd.none)
 
         PeerMsg HostLost ->
@@ -450,8 +444,8 @@ update msg model =
             in case model of
                 InGame page game opts wikigraph ->
                     (InGame page (newPlayerList game) opts wikigraph, toast)
-                PostGameReview game wikigraph zoom ->
-                    (PostGameReview (newPlayerList game) wikigraph zoom, toast)
+                PostGameReview game wikigraph ->
+                    (PostGameReview (newPlayerList game) wikigraph, toast)
                 Lobby lobby _ ->
                     (Welcome {inputJoinId="", inputName=lobby.self.name, seed=lobby.seed, uuid=lobby.uuid, displayPages=(Nothing, Nothing)}, toast)
                 _ -> (model, toast)
@@ -485,18 +479,18 @@ update msg model =
                 Welcome opts -> (newGame opts, makeToast "You joined the lobby")
                 Lobby opts _ -> (newGame opts, makeToast "Destination pages changed")
                 InGame _ opts _ _ -> (newGame opts, makeToast "Host wants a new game")
-                PostGameReview opts _ _ -> (newGame opts, makeToast "Host wants a new game")
+                PostGameReview opts _ -> (newGame opts, makeToast "Host wants a new game")
                 _ -> (Bad "Why are you receiving lobby invitation?", Cmd.none)
 
         PeerMsg (Error err) ->
             ( model, makeToast <| "P2P error: " ++ err )
 
         GiveUp -> case model of
-            InGame _ game _ wikigraph -> (PostGameReview game wikigraph initZoom, Cmd.none)
+            InGame _ game _ wikigraph -> (PostGameReview game wikigraph, Cmd.none)
             _ -> (Bad "You can't give up! You're not even playing", Cmd.none)
 
         ClickedNewGame -> case model of
-            PostGameReview game _ _ -> 
+            PostGameReview game _ -> 
                 if game.amHost then
                     let
                         lobby =
@@ -519,43 +513,35 @@ update msg model =
         
         CopyToClipboard str -> (model, copyToClipboard str)
 
-        -- received animation frame and ticked the wikigraph force sim
-        UpdatedWikiGraph wikigraph -> case model of
-            InGame page game opts _ -> (InGame page game opts wikigraph, Cmd.none)
-            PostGameReview game _ zoom -> (PostGameReview game wikigraph zoom, Cmd.none)
-            _ -> (Bad "Why are you receiving wikigraph tick?", Cmd.none)
-
         -- display the current page's content
         DisplayToc toggle -> case model of
             InGame page game opts wikigraph ->
                 (InGame page game {opts | displayToc=toggle} wikigraph, Cmd.none)
             _ ->
                 (model, Cmd.none)
-        
-        -- user mouse entered/left a node on the wikigraph display
-        HoverWikiGraphNode nodeId ->
-            (model, Cmd.none)
-            -- TODO maybe display a page preview in the wikigraph svg: https://developer.mozilla.org/en-US/docs/Web/SVG/Element/foreignObject
 
-        -- user is 
-        ZoomPan zoomMsg -> case model of
-            PostGameReview game wikigraph zoom ->
-                (PostGameReview game wikigraph (Zoom.update zoomMsg zoom), Cmd.none)
-            _ ->
-                (model, Cmd.none)
+        -- updated force layout on wikigraph or the user is manipulating the graph's svg
+        WikiGraphMsg wikigraphMsg -> case model of
+            InGame page game opts wikigraph ->
+                (InGame page game opts (WikiGraph.onMsg wikigraphMsg wikigraph), Cmd.none)
+
+            PostGameReview game wikigraph ->
+                (PostGameReview game (WikiGraph.onMsg wikigraphMsg wikigraph), Cmd.none)
+
+            _ -> (model, Cmd.none)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    let wikiGraphSimulationTicker = WikiGraph.subscription >> Sub.map UpdatedWikiGraph
+    let wikiGraphSub = WikiGraph.subscription >> Sub.map WikiGraphMsg
     in
     case model of
     -- ticks on welcome to request more example titles
     Welcome _ -> Sub.batch [ Time.every 5000 Tick, PeerPort.receiveData]
     -- ticks while in game to update the time display
     InGame _ _ _ wikigraph ->
-        Sub.batch [ Time.every 1000 Tick, PeerPort.receiveData, wikiGraphSimulationTicker wikigraph ]
-    PostGameReview _ wikigraph zoom ->
-        Sub.batch [PeerPort.receiveData, wikiGraphSimulationTicker wikigraph, Zoom.subscriptions zoom ZoomPan]
+        Sub.batch [ Time.every 1000 Tick, PeerPort.receiveData, wikiGraphSub wikigraph ]
+    PostGameReview _ wikigraph ->
+        Sub.batch [PeerPort.receiveData, wikiGraphSub wikigraph]
     _ -> PeerPort.receiveData
 
 

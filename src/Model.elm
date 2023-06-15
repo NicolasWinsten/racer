@@ -4,8 +4,7 @@ import Time
 import Either exposing (Either(..))
 import Random exposing (Seed)
 import Types exposing (..)
-import WikiGraph exposing (WikiGraphState, NodeId)
-import Zoom
+import WikiGraph exposing (WikiGraphState)
 
 {- Model and Msg types, along with some other helper types -}
 
@@ -36,7 +35,7 @@ type Model
         , displayToc : Bool
         }
         WikiGraphState
-    | PostGameReview InProgressGame WikiGraphState Zoom.Zoom
+    | PostGameReview InProgressGame WikiGraphState
     | Bad String
 
 
@@ -76,10 +75,8 @@ type Msg
     | OnInputLobbyParams { numDestinations : Int }
     -- some ticks for updating the display pages and time display
     | Tick Time.Posix
-    | UpdatedWikiGraph WikiGraphState
-    | HoverWikiGraphNode (Maybe NodeId) -- currently unused
+    | WikiGraphMsg WikiGraph.WikiGraphMsg
     | PeerMsg PeerMsg
     | CopyToClipboard String
     | DisplayToc Bool
-    | ZoomPan Zoom.OnZoom
     | NoOp

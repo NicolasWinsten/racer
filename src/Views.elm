@@ -23,9 +23,7 @@ import Debug
 import Html
 import Loading
 import Html.Events
-import WikiGraphView
 import WikiGraph
-import Zoom exposing (Zoom)
 
 {-
    This is where I keep all the ugly view code
@@ -329,6 +327,12 @@ viewWelcome options =
             ]
         ]
 
+
+type ProgressDisplayTitle
+    = MetDestination Title
+    | CurrentLeg Title
+    | UnMetDestination Title
+
 {-| display ordered list of previous met destinations, the current leg, and the remaining destinations to hit
 
 titles in the current leg can be clicked on to return to.
@@ -352,15 +356,23 @@ viewProgress game {sections} displayToc=
         -- depending on whether the title is a destination or part of the current leg, display them differently
         titleList = List.Extra.init metDestinations
             |> Maybe.withDefault []
-            |> \metDests -> List.map Right metDests ++ List.map Left currentLeg ++ List.map Right remainingDestinations
+            |> \metDests ->
+                List.map MetDestination metDests
+                ++ List.map CurrentLeg currentLeg
+                ++ List.map UnMetDestination remainingDestinations
 
         -- which title should the player be displayed over?
         -- indicates their progress in the game
-        playersMarkedTitle player = List.reverse titleList
+        playersMarkedTitle player =
+            let onSameLeg = state.currentLeg.goal == player.gameState.currentLeg.goal
+                playersPage = player.gameState.currentLeg.currentPage
+                playerMetDest dest = List.member dest (getMetDestinations player.gameState)
+            in
+            List.reverse titleList
             |> List.Extra.find (\t -> case t of
-                    Right dest -> List.member dest (getMetDestinations player.gameState)
-                    Left currTitle -> state.currentLeg.goal == player.gameState.currentLeg.goal
-                        && currTitle == player.gameState.currentLeg.currentPage
+                    UnMetDestination dest -> playerMetDest dest
+                    CurrentLeg currTitle -> onSameLeg && currTitle == playersPage
+                    MetDestination dest -> not onSameLeg && playerMetDest dest
                 )
 
         -- render the players that should be displayed above some title
@@ -373,7 +385,7 @@ viewProgress game {sections} displayToc=
         -- table of contents section so that larger pages are easier to navigate
         toc =
             if displayToc then
-                List.filter (.level >> (==) 1) sections
+                List.filter (.level >> (==) 1) sections -- TODO allow expanding the sections
                     |> List.map (\{anchor} -> link [Font.underline, Font.size 14] {url="#"++anchor, label=text <| String.replace "_" " " anchor})
                     |> column
                         [ spacing 5
@@ -405,8 +417,9 @@ viewProgress game {sections} displayToc=
             in el [Font.semiBold, shortdescTip] (text title)
         viewTitle title =
             let displayTitle = case title of
-                    Right dest -> viewDestinationTitle dest
-                    Left currTitle -> viewCurrentLegTitle currTitle
+                    CurrentLeg currTitle -> viewCurrentLegTitle currTitle
+                    MetDestination dest -> viewDestinationTitle dest
+                    UnMetDestination dest -> viewDestinationTitle dest
             in column [Font.size 16, alignBottom] [displayPlayersAbove title, displayTitle]
 
     in List.map viewTitle titleList
@@ -580,8 +593,8 @@ bestLegsDisplay game =
 when player finishes or gives up, enter the game review screen where
 they can view the leaderboards and the best wikiladders from the players
 -}
-viewPostGame : InProgressGame -> WikiGraph.WikiGraphState -> Zoom -> Element Msg
-viewPostGame game wikigraph zoom =
+viewPostGame : InProgressGame -> WikiGraph.WikiGraphState -> Element Msg
+viewPostGame game wikigraph =
     let
         players = allPlayers game
         finishedPlayers = List.filter (.gameState >> isGameFinished) players
@@ -641,7 +654,9 @@ viewPostGame game wikigraph zoom =
             let playerColorMap = game.players
                     |> Dict.insert (Maybe.withDefault "" game.uuid) game.self
                     |> Dict.map (\_ {color} -> toRgb color )
-            in html <| WikiGraphView.view wikigraph playerColorMap zoom
+            in Element.map Model.WikiGraphMsg
+                <| html 
+                <| WikiGraph.view wikigraph playerColorMap
             
         newGameButton = Input.button buttonStyle {onPress=Just ClickedNewGame, label=text "New Game"}
 
@@ -727,6 +742,6 @@ view model = case model of
     InGame (Left title) _ _ _ -> layout [] <|
         el [padding 20] (text ("Fetching " ++ title ++ "..."))
 
-    PostGameReview game wikigraph zoom -> layout [] (viewPostGame game wikigraph zoom)
+    PostGameReview game wikigraph -> layout [] (viewPostGame game wikigraph)
 
     Bad msg -> layout [] (el [Font.size 24] <| text ("There was a problem: " ++ msg))
