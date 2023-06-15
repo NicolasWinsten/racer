@@ -16,12 +16,9 @@ import Helpers exposing (..)
 import Force
 import Browser.Events
 import Maybe.Extra
+import Basics.Extra
 
--- node centroid will be placed in middle of these dimensions
-width = 1000
-height = 500
-
--- We also keep a wikigraph during gameplay in order to visualize the roots taken by the players
+-- We also keep a wikigraph during gameplay in order to visualize the routes taken by the players
 
 {-| unique id for each node in the wikigraph
 -}
@@ -76,6 +73,12 @@ newNode {x,y} id_ =
     , id = id_
     , visitors = Set.empty
     }
+
+-- node centroid will be placed in middle of these dimensions
+width = 1000
+height = 500
+
+center = {x=width/2, y=height/2}
 
 -- preferred positions of the destination nodes
 preferredDestPositions : WikiGraph -> List Pos
@@ -185,8 +188,8 @@ newSimulation numIterations graph =
       (\(title, goal) -> {
         source=(title,goal),
         target=(goal,goal),
-        distance=60,
-        strength=Just 0.05
+        distance=100,
+        strength=Just 0.01
       })
       (Dict.values graph.looseEnds)
 
@@ -203,14 +206,25 @@ newSimulation numIterations graph =
       |> List.map (\(source, target) -> {
         source=source,
         target=target,
-        distance=30,
+        distance=100,
         strength=Nothing
       })
+
+    -- we want to encourage the graph to be laid out left to right
+    -- such that the destination nodes are ordered along the x-axis
+    -- I do this by pulling the last destination node to the right
+    -- and then recentering the graph
+    stretch = List.Extra.last graph.destinations
+      |> Maybe.map (\{title} -> { node=(title,title), strength=0.1, target=width})
+      |> Maybe.Extra.toList
+      |> Force.towardsX
+
 
     forces =
       [ Force.customLinks 1 <| danglingDestLinks ++ dummyLinks ++ edgeLinks
       , Force.manyBody <| List.map .id graph.nodes
-      , Force.center (width/2) (height/2)
+      , stretch
+      , Force.center center.x center.y
       ]
   in Force.iterations numIterations (Force.simulation forces)
 
@@ -256,17 +270,24 @@ update player {previousLegs, currentLeg} numIterations (wikigraph, sim) =
 tickWikiGraphSim : WikiGraphState -> WikiGraphState
 tickWikiGraphSim (graph, sim) =
   let (newState, refinedNodes) = Force.tick sim graph.nodes
-      originalPos nodeId = List.Extra.find (\{id} -> id == nodeId) graph.nodes
-        |> Maybe.map (\{x,y} -> {x=x,y=y}) >> Maybe.withDefault {x=0, y=0}
+      -- originalPos nodeId = getNode nodeId graph
+      --   |> Maybe.map (\{x,y} -> {x=x,y=y}) >> Maybe.withDefault {x=0, y=0}
 
-      newNodes = refinedNodes
-        |> List.Extra.updateIf isDestinationNode
-          (\({id} as n) ->
-            -- the destination nodes can slide along the x-axis to accommodate long player paths
-            -- otherwise they are fixed on the y-axis
-            let {y} = originalPos id in { n | y=y }
-          )
-  in ({graph | nodes=newNodes}, newState)
+      -- (destNodes, pathNodes) = List.partition isDestinationNode refinedNodes
+      
+      -- destination nodes cannot go past center.y +- wiggleroom
+      -- on y axis (to keep things in left to right fashion)
+      wiggleroom = 200
+
+      clamped = refinedNodes
+          |> List.Extra.updateIf isDestinationNode (\dest ->
+              { dest | y=dest.y
+                |> Basics.Extra.atLeast (center.y - wiggleroom)
+                |> Basics.Extra.atMost (center.y + wiggleroom)
+              }
+            )
+
+  in ({graph | nodes=clamped}, newState)
 
 {-| step through the force simulation and return an updated wikigraph
 -}

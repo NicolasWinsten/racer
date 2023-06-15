@@ -56,7 +56,7 @@ while in game
 
 it is low so as to not effect gameplay
 -}
-forceItersWhileInGame = 50
+forceItersWhileInGame = 100
 
 {-| number of rounds of force calculations to perform for wikigraph layout
 while in post game review
