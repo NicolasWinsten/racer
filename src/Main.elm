@@ -26,9 +26,8 @@ getPage : Title -> Cmd Msg
 getPage title = PageFetch.getPage title
     -- I want a timestamp even if the request fails
     -- so I convert getPage from Task String Page to Task x (Result String Page)
-        -- |> Task.attempt (\r -> LoadedPage title r (Time.millisToPosix 0))
     |> Task.map Ok
-    |> Task.onError (Err >> Task.succeed) -- 
+    |> Task.onError (Err >> Task.succeed)
     |> Task.andThen (\page -> Task.map (LoadedPage title page) Time.now)
     |> Task.perform identity
 
@@ -56,12 +55,12 @@ while in game
 
 it is low so as to not effect gameplay
 -}
-forceItersWhileInGame = 100
+forceItersWhileInGame = 50
 
 {-| number of rounds of force calculations to perform for wikigraph layout
 while in post game review
 -}
-forceItersPostGame = 1000
+forceItersPostGame = 3000
 
 {-| create a bootstrap Toast with the given message
 -}
