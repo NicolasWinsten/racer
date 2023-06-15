@@ -12,14 +12,12 @@ import Html exposing (Html)
 import Html.Attributes
 import Model exposing (..)
 import Types exposing (..)
-import Parse exposing (viewNode)
 import List.Extra
 import Maybe.Extra
 import Colors.Opaque as EColor
 import Time
 import Either exposing (Either(..))
 import Basics.Extra
-import Debug
 import Html
 import Loading
 import Html.Events
