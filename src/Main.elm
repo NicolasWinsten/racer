@@ -16,6 +16,7 @@ import Articles
 import Either exposing (Either(..))
 import Random.List
 import WikiGraph
+import Basics.Extra
 
 
 
@@ -155,9 +156,9 @@ startGame game time =
     )
 
 
+
+
 {- *scarface voice* say hello to my enormous update function -}
-
-
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -485,7 +486,7 @@ update msg model =
             ( model, makeToast <| "P2P error: " ++ err )
 
         GiveUp -> case model of
-            InGame _ game _ wikigraph -> (PostGameReview game wikigraph, Cmd.none)
+            InGame _ game _ wikigraph -> (PostGameReview game (WikiGraph.reheat forceItersPostGame wikigraph), Cmd.none)
             _ -> (Bad "You can't give up! You're not even playing", Cmd.none)
 
         ClickedNewGame -> case model of

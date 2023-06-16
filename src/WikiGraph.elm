@@ -1,4 +1,4 @@
-module WikiGraph exposing (WikiGraphState, WikiGraphMsg, onMsg, update, subscription, init, view)
+module WikiGraph exposing (WikiGraphState, WikiGraphMsg, onMsg, update, subscription, init, view, reheat, badState)
 
 {-| A WikiGraph structure is kept to visualize the paths taken by the players.
 
@@ -30,7 +30,7 @@ import Html.Events exposing (onMouseEnter)
 import Html.Events exposing (onMouseLeave)
 import Maybe.Extra
 import TypedSvg.Types exposing (FontWeight(..))
-import Zoom exposing (Zoom)
+import Zoom
 import Color exposing (Color)
 
 -- We also keep a wikigraph during gameplay in order to visualize the routes taken by the players
@@ -81,7 +81,7 @@ type alias WikiGraph =
   , looseEnds : Dict PeerId NodeId        -- nodes at the tip of player paths that aren't linked up to any destination
   , destinations : List PagePreview       -- destination titles of the game
   , playerLocations : Dict PeerId NodeId  -- current locations of players
-  , labelAnchors : Dict NodeId Pos
+  , labelAnchors : Dict NodeId (Pos {})
   }
 
 -- use WikiGraphState in the model to track the force simulation state
@@ -98,9 +98,7 @@ getNode id graph = Dict.get id graph.nodes
 getEdge : EdgeId -> WikiGraph -> Maybe Edge
 getEdge id graph = Dict.get id graph.edges
 
-type alias Pos = { x : Float, y : Float}
-
-newNode : Pos -> NodeData -> Node
+newNode : Pos a -> NodeData -> Node
 newNode {x,y} data = 
     { x = x
     , y = y
@@ -121,12 +119,16 @@ isLabelNode : NodeId -> Bool
 isLabelNode (_,_,flag) = flag == 1
 
 isDestinationNode : NodeId -> Bool
-isDestinationNode (title, goal, _) = title == goal
+isDestinationNode id = id == nodeId (Destination <| titleOf id)
 
 mkLabelId : NodeId -> NodeId
 mkLabelId (title,goal,_) = (title,goal,1)
 
-mkLabelNode : Maybe Pos -> Node -> Node
+{-| create the corresponding label node for a given node
+
+either use the given inital position or use the given node's position with some added noise
+-}
+mkLabelNode : Maybe (Pos {}) -> Node -> Node
 mkLabelNode pos n =
   let
     (title, _, _) = n.id
@@ -178,10 +180,14 @@ updateWikiGraph player source reached graph =
     -- so a their node can be placed near it
     lastPos = getNode source graph
       |> Maybe.map (\n -> {x=n.x, y=n.y})
-      |> Maybe.withDefault {x=10, y=0}
+      |> Maybe.withDefault center
       |> \pos ->
-        let (noise, _) = Random.step (Random.float 0 1) (strToSeed player)
-        in {x=pos.x+noise,y=pos.y+noise}  -- add a little noise so it doesn't break the force layout
+        -- add a little noise so it doesn't break the force layout
+        -- by laying one node directly on another
+        let str = player ++ titleOf source ++ titleOf reached
+            (noisex, seed) = Random.step (Random.float 1 10) (strToSeed str)
+            (noisey, _) = Random.step (Random.float -10 10) seed
+        in {x=pos.x+noisex,y=pos.y+noisey}
 
     -- create a new node or update the existing node's visitor list
     updatedNode = getNode reached graph
@@ -200,7 +206,6 @@ updateWikiGraph player source reached graph =
   in
     { graph |
       playerLocations=Dict.insert player reached graph.playerLocations
-
       -- update the touched nodes that the player touched them
       , nodes=Dict.insert reached updatedNode graph.nodes
           |> Dict.update source (Maybe.map (\s -> {s | visitors=Set.insert player s.visitors}))
@@ -268,19 +273,9 @@ newSimulation numIterations graph =
       |> List.map (\id -> configLink linkDistance Nothing (id, mkLabelId id))
     labelNodes = List.map .target labelEdges
 
-    -- we want to encourage the graph to be laid out left to right
-    -- such that the destination nodes are ordered along the x-axis
-    -- I do this by pulling the last destination node to the right
-    -- and then recentering the graph
-    -- stretch = List.Extra.last graph.destinations
-    --   |> Maybe.map (\{title} -> { node=nodeId (Destination title), strength=0.1, target=width})
-    --   |> Maybe.Extra.toList
-    --   |> Force.towardsX
-
     forces =
       [ Force.customLinks 1 <| danglingDestLinks ++ dummyLinks ++ edgeLinks ++ labelEdges
       , Force.manyBody <| Dict.keys graph.nodes ++ labelNodes
-      --, stretch
       , Force.center center.x center.y
       ]
   in Force.iterations numIterations (Force.simulation forces)
@@ -294,7 +289,12 @@ init destinations =
     --TODO put an extent on the zoom's scale and pan
       initZoom : Zoom.Zoom
       initZoom = Zoom.init dimensions
-  in {graph=graph, sim=newSimulation 10 graph, svgZoomPan = initZoom, highlightedNode=Nothing}
+  in
+  { graph=graph
+  , sim=newSimulation 10 graph
+  , svgZoomPan = initZoom
+  , highlightedNode=Nothing
+  }
 
 {-| update the wikigraph when a player moves from one title to another
 -}
@@ -339,6 +339,8 @@ update player {previousLegs, currentLeg} numIterations ({graph} as wgstate) =
           -- no new edge, but update player location because they're on a destination
           { wgstate | graph={graph | playerLocations=Dict.insert player reachedNode graph.playerLocations}}
 
+{-|
+-}
 tickWikiGraphSim : WikiGraphState -> WikiGraphState
 tickWikiGraphSim ({graph, sim} as wgstate) =
   let
@@ -347,38 +349,45 @@ tickWikiGraphSim ({graph, sim} as wgstate) =
       |> List.map
         (\(id, n) -> mkLabelNode (Dict.get id graph.labelAnchors) n)
 
+    -- rotate all nodes such that starting node and destination node are level
+    getDest title = getNode (nodeId <| Destination title) graph
+    start = List.head graph.destinations |> Maybe.andThen (.title >> getDest)
+    end = List.reverse graph.destinations |> List.head |> Maybe.andThen (.title >> getDest)
+
+    -- take the line from the starting node to the last destination node
+    -- to get the degrees to rotate the graph by
+    degrees = case (start, end) of
+      (Just source, Just target) -> -(angleOf <| subtract target source)
+      _ -> 0
+    
+    pivot = Maybe.map (\{x,y} -> {x=x, y=y}) start
+      |> Maybe.withDefault {x=0, y=0}
+
     (newState, refinedNodes) = Force.tick sim (Dict.values graph.nodes ++ labelNodes)
-      -- originalPos nodeId = getNode nodeId graph
-      --   |> Maybe.map (\{x,y} -> {x=x,y=y}) >> Maybe.withDefault {x=0, y=0}
+      -- rotate each node around the starting node so that it reads left to right
+      |> Tuple.mapSecond ( List.map (rotate degrees pivot) )
 
-      -- (destNodes, pathNodes) = List.partition isDestinationNode refinedNodes
-      
-      -- destination nodes cannot go past center.y +- wiggleroom
-      -- on y axis (to keep things in left to right fashion)
-    wiggleroom = 200
-
+    -- sift out the label dummy nodes
     (labels, nodes) = List.partition (.id >> isLabelNode) refinedNodes
-
-    clamped = nodes
-        |> List.Extra.updateIf (.id >> isDestinationNode) (\dest ->
-            { dest | y=dest.y
-              |> Basics.Extra.atLeast (center.y - wiggleroom)
-              |> Basics.Extra.atMost (center.y + wiggleroom)
-            }
-          )
-        |> Dict.Extra.fromListBy .id
     
     nodeOfLabel l = case l of
       Label id -> Just id
       _ -> Nothing
 
-    -- update the label 
+    -- update the label positions
     labelPosMap = labels
-      |> List.filterMap (\{x,y,data} -> Maybe.map (Basics.Extra.flip Tuple.pair {x=x,y=y}) (nodeOfLabel data))
+      |> List.filterMap
+        (\{x,y,data} -> Maybe.map (Basics.Extra.flip Tuple.pair {x=x,y=y}) (nodeOfLabel data))
       |> Dict.fromList
 
   in
-  {wgstate | graph={graph | nodes=clamped, labelAnchors=labelPosMap}, sim=newState}
+  {wgstate | graph={graph | nodes=Dict.Extra.fromListBy .id nodes, labelAnchors=labelPosMap}, sim=newState}
+
+{-| start the force layout algorithm again
+-}
+reheat : Int -> WikiGraphState -> WikiGraphState
+reheat iters ({graph} as wg) = {wg | sim=newSimulation iters graph}
+
 
 
 type WikiGraphMsg
@@ -419,33 +428,33 @@ setAlpha a color =
   let {red,green,blue} = Color.toRgba color
   in Color.rgba red green blue a
 
-hideAlpha = 0.3
+hideAlpha = 0.1
 
 
 
 {-| for each edge in the wikigraph, color it according to all the players that have used it
 -}
-svgEdge : WikiGraph -> ColorMap -> Edge -> Svg msg
-svgEdge {nodes} colormap edge =
+svgEdge : WikiGraphState -> ColorMap -> Edge -> Svg WikiGraphMsg
+svgEdge {graph} colormap edge =
   let
-      source = Dict.get edge.source nodes
+      source = getNode edge.source graph
           |> Maybe.map (\{x,y} -> {x=x, y=y})
           |> Maybe.withDefault {x=0,y=0}  -- will not happen
 
-      target = Dict.get edge.target nodes
+      target = getNode edge.target graph
           |> Maybe.map (\{x,y} -> {x=x, y=y})
           |> Maybe.withDefault {x=0,y=0}  -- will not happen
 
       colors = Set.toList edge.visitors
         |> List.filterMap (\player -> Dict.get player colormap)
   in
-      coloredPath colors source.x source.y target.x target.y
+      coloredPath colors source target
 
 {-| Create a svg group that draws a colored line from one x,y point to another
 
 -}
-coloredPath : List Color -> Float -> Float -> Float -> Float -> Svg msg
-coloredPath colors sourceX sourceY targetX targetY =
+coloredPath : List Color -> Pos a -> Pos b -> Svg msg
+coloredPath colors source target =
     let
         portionThickness : Float
         portionThickness = 3
@@ -459,19 +468,16 @@ coloredPath colors sourceX sourceY targetX targetY =
                 , AInPx.y2 <| (toFloat i)*portionThickness + portionThickness/2
                 ]
                 []
-        dist = sqrt <| (sourceX - targetX)*(sourceX - targetX) + (sourceY - targetY)*(sourceY - targetY)
         -- scale the path to match the distance between points
-        scale = Scale (dist/100) 1
+        scale = Scale (dist source target / 100) 1
 
         totalThickness = (toFloat <| List.length colors)*portionThickness
         -- start line at the source point centered on middle of line
-        translate = Translate sourceX (sourceY - totalThickness/2)
+        translate = Translate source.x (source.y - totalThickness/2)
 
-        -- compute x,y vector from source to target point
-        (x_,y_) = (targetX - sourceX, targetY - sourceY)
-        degrees = (atan2 y_ x_) * 180 / pi
+        degrees = angleOf <| subtract target source
         -- rotate the line to match vector from source to target
-        rotation = Rotate degrees sourceX sourceY
+        rotation = Rotate degrees source.x source.y
 
     in g [ A.class ["links"], A.transform [rotation, translate, scale] ]
         <| List.indexedMap mkLine colors
@@ -479,7 +485,7 @@ coloredPath colors sourceX sourceY targetX targetY =
 
 {-| render a destination node as its thumbnail in a circle
 -}
-mkPictureNode : {url : String, width : Float, height : Float} -> Pos -> Float -> Title -> Svg msg
+mkPictureNode : {url : String, width : Float, height : Float} -> Pos a -> Float -> Title -> Svg msg
 mkPictureNode img {x,y} radius title =
   let id = encodeTitle title
         |> String.replace "(" "lp"
@@ -524,7 +530,10 @@ svgNode {graph, highlightedNode} colormap node =
         |> Dict.Extra.find (\player nodeid -> nodeid == node.id)
         |> Maybe.andThen (\(player, _) -> Dict.get player colormap)
 
+      transparent = False -- TODO use this to highlight a particular player path
+
       fillcolor = Maybe.withDefault Color.black playercolor
+        |> \c -> if transparent then setAlpha hideAlpha c else c
 
       playerIsHere = Maybe.Extra.isJust playercolor
 
@@ -543,10 +552,7 @@ svgNode {graph, highlightedNode} colormap node =
       labelAnchor = Dict.get node.id graph.labelAnchors
         |> Maybe.withDefault {x=0,y=0}
 
-      labelDegrees =
-        let x = labelAnchor.x - node.x
-            y = labelAnchor.y - node.y
-        in (atan2 y x) * 180 / pi
+      labelDegrees = angleOf <| subtract labelAnchor node
 
       labelUpsideDown = labelAnchor.x < node.x
       labelTransform =
@@ -571,7 +577,7 @@ svgNode {graph, highlightedNode} colormap node =
           String.left maxChars nodeTitle ++ "..."
 
       labelText = -- TODO add option to highlight and display titles of particular player
-        if True then
+        if not transparent then
           TypedSvg.text_
           [ A.fontFamily ["sans-serif"]
           , AInPx.fontSize 10
@@ -589,7 +595,7 @@ svgNode {graph, highlightedNode} colormap node =
 
       nodeCircle = case Maybe.andThen .thumbnail destinationPreview of
         Just src ->
-          mkPictureNode {url=src.src, width=src.width, height=src.height} {x=node.x, y=node.y} radius nodeTitle
+          mkPictureNode {url=src.src, width=src.width, height=src.height} node radius nodeTitle
         Nothing ->
           circle
             [ AInPx.r radius
@@ -620,7 +626,7 @@ view ({graph, svgZoomPan} as wikigraph) colors =
             |> List.map (svgNode wikigraph colormap)
             |> g [A.class ["nodes"]]
         edgeGroups = Dict.values graph.edges
-            |> List.map (svgEdge graph colormap)
+            |> List.map (svgEdge wikigraph colormap)
     in
     -- the svg element has fixed dimensions
     -- if we want it to be resizable then we would need to update the Zoom with the new dimensions
@@ -640,3 +646,19 @@ view ({graph, svgZoomPan} as wikigraph) colors =
         -- the actual zoom and pan transforms are done on the drawn content
       , g [Zoom.transform svgZoomPan] (edgeGroups ++ [nodeElements])
       ]
+
+badState : WikiGraphState -> Maybe String
+badState wg =
+  let
+    badNode = wg.graph.nodes
+      |> Dict.Extra.find (\_ {x,y} -> isNaN x || isNaN y)
+      |> Maybe.map Tuple.first
+
+    badLabel = wg.graph.labelAnchors
+      |> Dict.Extra.find (\_ {x,y} -> isNaN x || isNaN y)
+      |> Maybe.map Tuple.first
+    
+  in case (badNode, badLabel) of
+    (Just node, _) ->Just <| "Bad position found for node " ++ titleOf node
+    (_, Just node) -> Just <| "Bad label node position for node " ++ titleOf node
+    _ -> Nothing

@@ -206,3 +206,24 @@ numSteps : GameState -> Int
 numSteps {previousLegs, currentLeg} =
     let stepsInLeg leg = List.length leg.previousPages
     in stepsInLeg currentLeg + List.sum (List.map stepsInLeg previousLegs)
+
+
+type alias Pos a = {a | x : Float, y : Float}
+
+subtract : Pos a -> Pos b -> Pos {}
+subtract a b = {x=a.x - b.x, y=a.y - b.y}
+
+dist : Pos a -> Pos b -> Float
+dist a b = sqrt <| (a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y)
+
+angleOf : Pos a -> Float
+angleOf {x,y} = (atan2 y x) * 180 / pi
+
+rotate : Float -> Pos a -> Pos b -> Pos b
+rotate degrees pivot vec =
+    let radians = degrees * pi / 180
+    in
+    { vec
+    | x=pivot.x + (cos radians)*(vec.x - pivot.x) - (sin radians)*(vec.y - pivot.y)
+    , y=pivot.y + (sin radians)*(vec.x - pivot.x) + (cos radians)*(vec.y - pivot.y)
+    }
