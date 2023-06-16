@@ -33,7 +33,8 @@ const seed_pages = [
 	"Economy",
 	"Modern Era",
 	"History of Earth",
-	"Human history"
+	"Human history",
+	"Entertainment"
 ]
 
 const poolFile = "accepted.txt"
