@@ -274,7 +274,7 @@ newSimulation numIterations graph =
     labelNodes = List.map .target labelEdges
 
     forces =
-      [ Force.customLinks 1 <| danglingDestLinks ++ dummyLinks ++ edgeLinks ++ labelEdges
+      [ Force.customLinks 5 <| danglingDestLinks ++ dummyLinks ++ edgeLinks ++ labelEdges
       , Force.manyBody <| Dict.keys graph.nodes ++ labelNodes
       , Force.center center.x center.y
       ]
