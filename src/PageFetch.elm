@@ -59,7 +59,7 @@ requestPage title =
         , headers = []
         , body = Http.emptyBody
         , url = "https://en.wikipedia.org/w/api.php?action=parse&prop=text|sections&redirects=true&format=json&origin=*&page=" ++ encodeTitle title
-        , timeout = Just 5000
+        , timeout = Nothing
         , resolver = Http.stringResolver <| resolver pageDecoder
         }
 
