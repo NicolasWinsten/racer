@@ -27,7 +27,7 @@ A real-time visualization of the player's paths is provided for each game!
 - [X] Display table of contents for easier page navigation
 - [] Display collapsible table of contents
 - [] Send P2P message on give up
-- [] add ElmUI snackbar for errors, other messages
+- [X] add ElmUI snackbar for errors, other messages
 
 # Bugs
 - Late-joining players will have out-of-sync wikigraphs (solution: either disallow late-joiners or send the whole wikigraph to new player in gamestate info)
