@@ -5,6 +5,7 @@ import Either exposing (Either(..))
 import Random exposing (Seed)
 import Types exposing (..)
 import WikiGraph exposing (WikiGraphState)
+import Toast exposing (Toasts)
 
 {- Model and Msg types, along with some other helper types -}
 
@@ -22,7 +23,7 @@ type alias WelcomeOpts =
 -}
 type alias LobbyOpts = { numDestinationsInput : Int }
 
-type Model
+type Phase
     -- user is at the welcome screen, choosing username or typing in joinId
     = Welcome WelcomeOpts
     -- user is in the pregame lobby waiting for host to start
@@ -36,10 +37,13 @@ type Model
         }
         WikiGraphState
     | PostGameReview InProgressGame WikiGraphState
-    | Bad String
+
+type alias Model = {phase : Phase, toasts : Toasts} 
 
 
 {-| types of messages sent to other players P2P
+
+TODO move this to PeerPort
 -}
 type PeerMsg
     -- send lobby info when making changes to the lobby, or to joining players
@@ -77,6 +81,7 @@ type Msg
     | Tick Time.Posix
     | WikiGraphMsg WikiGraph.WikiGraphMsg
     | PeerMsg PeerMsg
+    | ToastMsg Toast.ToastMsg
     | CopyToClipboard String
     | DisplayToc Bool
     | NoOp

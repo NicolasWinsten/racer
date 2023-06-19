@@ -140,15 +140,7 @@
                 navigator.clipboard.write(data)
             })
 
-
-            app.ports.makeToast.subscribe(
-                function(msg) {
-                    console.log(msg)
-                }
-            );
-
             app.ports.sendData.subscribe(handleOutgoingData)
-
 
             app.ports.connectToHostPort.subscribe(({host, name}) => {
                 console.log("attempting to connect to host at", host)

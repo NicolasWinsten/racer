@@ -22,6 +22,7 @@ import Html
 import Loading
 import Html.Events
 import WikiGraph
+import Toast
 
 {-
    This is where I keep all the ugly view code
@@ -667,12 +668,20 @@ viewPostGame game wikigraph =
         ]
 
 view : Model -> Html Msg
-view model = case model of
+view model =
+    let
+        toastView toasts = mapAttribute ToastMsg
+            <| inFront
+            <| el [alignBottom, alignRight, moveLeft 15, moveUp 15, Font.size 16, width (px 200)]
+            <| Toast.view toasts
+            
+    in 
+    case model.phase of
     -- welcome screen
-    Welcome opts -> layout [] <| viewWelcome opts
+    Welcome opts -> layout [toastView model.toasts] <| viewWelcome opts
 
     -- lobby screen where players typically join in and see the goal titles for the game
-    Lobby lobby opts -> layout [] <| viewLobby lobby opts
+    Lobby lobby opts -> layout [toastView model.toasts] <| viewLobby lobby opts
         
     -- while in game, display your progress at the top
     -- display the article content
@@ -696,6 +705,7 @@ view model = case model of
                 , htmlAttribute (Html.Attributes.style "position" "sticky")
                 , htmlAttribute (Html.Attributes.style "top" "0")
                 , htmlAttribute (Html.Attributes.style "z-index" "100") -- the wikipedia infobox elements were appearing above the progress bar
+                , toastView model.toasts
                 ]
                 <| row [width fill, spacing 10, padding 10]
                     [ viewProgress game page opts.displayToc
@@ -737,9 +747,7 @@ view model = case model of
         -- so unfortunately I can't align the body with Elm UI
         Html.div [] [progressbar, playerList, articleContent]
 
-    InGame (Left title) _ _ _ -> layout [] <|
+    InGame (Left title) _ _ _ -> layout [toastView model.toasts] <|
         el [padding 20] (text ("Fetching " ++ title ++ "..."))
 
-    PostGameReview game wikigraph -> layout [] (viewPostGame game wikigraph)
-
-    Bad msg -> layout [] (el [Font.size 24] <| text ("There was a problem: " ++ msg))
+    PostGameReview game wikigraph -> layout [toastView model.toasts] (viewPostGame game wikigraph)
