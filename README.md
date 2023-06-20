@@ -11,8 +11,8 @@ If there's something not working or you want to tell me why my code is bad, plea
 
 ### What makes this version different?
 A real-time visualization of the player's paths is provided for each game!
-![image](https://github.com/NicolasWinsten/racer/assets/56099103/731fde5a-5711-41ae-8d58-c0d03674c6d9)
-<img width="969" alt="image" src="https://github.com/NicolasWinsten/racer/assets/56099103/afbcc4e3-6972-47c3-960a-3290784e6e81">
+![image](https://github.com/NicolasWinsten/racer/assets/56099103/e04aee57-7e81-4faa-adad-beb0a8d88a82)
+![image](https://github.com/NicolasWinsten/racer/assets/56099103/90162c18-fddc-4c34-9fef-ffd02c8e56ee)
 
 
 
