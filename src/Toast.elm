@@ -96,6 +96,7 @@ errorMessage : String -> ToastMsg
 errorMessage str = Add <| Stubborn <|
   row
   [ padding 5
+  , spacing 5
   , Border.rounded 2
   , Border.width 2
   , Border.color Color.red
