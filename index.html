@@ -35,21 +35,6 @@
 
         let app = null
 
-        peer.on('open', function(id) {
-                console.log("peer ID is " + id)
-                createApp(Date.now(), id)
-        });
-
-        peer.on('error', function(err) {
-            console.log("Your peer has error:", err);
-            if (app == null) {
-                createApp(Date.now(), null)
-            }
-                
-            app.ports.receiveDataPeerJS.send({error : err.type})
-        });
-
-
         function createApp(seed, peerId) {
             app = Elm.Main.init({
                 node : document.getElementById("app"),
@@ -67,6 +52,23 @@
             const peerOptions = {debug : 2, port : 443, secure : true };
             console.log("peer options:", peerOptions);
             const peer = new Peer(null, peerOptions);
+
+            peer.on('open', function(id) {
+                console.log("peer ID is " + id)
+                createApp(Date.now(), id)
+            });
+
+            peer.on('error', function(err) {
+                console.log("Your peer has error:", err);
+                if (app == null) {
+                    createApp(Date.now(), null)
+                }
+                app.ports.receiveDataPeerJS.send({error : err.type})
+            });
+
+            peer.on('close', () => console.log("peer agent closed"))
+
+            peer.on('disconnected', () => console.log("peer agent disconnected from signalling server"))
 
             return peer
         }

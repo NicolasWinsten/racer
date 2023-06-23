@@ -166,12 +166,6 @@ viewPagePreview {showDesc, showLabelAbove} {title, thumbnail, description, short
                 in if showLabelAbove then [label, imgPlusDesc] else [imgPlusDesc, label]
             Just (Right shortdesc) ->
                 if showLabelAbove then [label, img, text shortdesc] else [img, label, text shortdesc]
-        
-        
-        -- if showDesc then
-        --         textColumn [centerX, Font.size 14] [el [alignLeft, padding 1] img, desc]
-        --     else
-        --         el [centerX] img
     in content
 
 
@@ -231,7 +225,7 @@ viewWelcome options =
                     , viewExampleTitle page2
                     ]
 
-        descSection = textColumn [Font.size 12, spacing 20]
+        descSection = textColumn [Font.size 16, spacing 20]
             [ paragraph [] <|
                 [ text
                     """
@@ -251,14 +245,14 @@ viewWelcome options =
             , paragraph [] <|
                 [ text
                     """
-                    Note: It is also possible that your browser is incompatible with some game features.
+                    Note: It is possible that your browser is incompatible with some game features.
                     If you're having trouble connecting to a game, then you may consider trying a different browser.
                     """
                 ]
             ]
         
         -- bulleted list of some notes on the game
-        notesSection = column [Font.size 12, spacing 5, padding 10] <| List.map viewLi
+        notesSection = column [Font.size 14, spacing 5, padding 10] <| List.map viewLi
             [ Li (el [Font.bold] (text "How did I build this?"))
                 [ Li
                     ( paragraph []
@@ -285,6 +279,31 @@ viewWelcome options =
                     )
                     []
                 ]
+            , Li (el [Font.bold] (text "What makes this version different?"))
+                [ Li
+                    ( paragraph []
+                        [ text "There are other versions of the wikipedia game available such as "
+                        , simpleLink "https://www.thewikigame.com/" "this popular option"
+                        , text ", so what makes my version different?"
+                        ]
+                    )
+                    []
+                , Li
+                    ( paragraph []
+                        [ text """
+                        The game linked above only allows one destination page per round. This makes each round
+                        very quick since experienced players can usually complete a path to a popular page in under 30 seconds.
+                        Here you can configure the number of destination pages for each game to create longer gameplay.
+                        """
+                        ]
+                    )
+                    []
+                , Li
+                    ( paragraph []
+                        [text "Each round creates a real-time visualization of the current game's players and their paths. An example is provided below."]
+                    )
+                    []
+                ]
             , Li
                 ( paragraph []
                     [ text "All feedback and complaints can be posted as an issue "
@@ -303,7 +322,7 @@ viewWelcome options =
             ]
 
         -- display the page title and some example titles for hype
-        header = row [width fill, spacing 10, height (px 300)]
+        header = wrappedRow [width fill, spacing 10, height (px 300)]
             [ column [width (fillPortion 1), Font.center, centerX, spacing 10]
                 [ paragraph [width (fillPortion 1), Font.bold, Font.size 36 ]
                     [text "peer-to-peer Wikipedia game"]
@@ -312,19 +331,24 @@ viewWelcome options =
             , el [width (fillPortion 2)] displayPages
             ]
 
-    in column [padding 10, spacing 10, centerX]
-        [ header
-        , pagebreak
-        , row [centerX, spacing 20]
-            [ descSection
-            , el [centerX] inputSection
+    in column [centerX, width (maximum 1200 fill)] 
+        [ column [padding 30, spacing 10, centerX]
+            [ header
+            , pagebreak
+            , row []
+                [ descSection
+                , el [alignRight] inputSection
+                ]
+            , pagebreak
+            , column [centerX]
+                [ el [Font.bold, Font.size 18] (text "Notes")
+                , notesSection
+                ]
             ]
-        , pagebreak
-        , column []
-            [ el [Font.bold, Font.size 18] (text "Notes")
-            , notesSection
-            ]
+        , image [centerX]
+            {src="assets/vizexample.png", description="wikigraph example"}
         ]
+    
 
 
 type ProgressDisplayTitle
@@ -528,9 +552,8 @@ viewLobby lobby opts =
         ]
 
 
--- display the shortest paths produced by all the players
--- 
-{-! display the shortest paths produced by all the players for each leg of the game
+
+{-| display the shortest paths produced by all the players for each leg of the game
 
 color the paths with the player colors in between the thumbnails of the destinations
 -}
