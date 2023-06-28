@@ -87,7 +87,7 @@ infoMessage str = Add <| Temp 5 <|
   , Background.color Color.floralwhite
   , mouseOver [Border.glow Color.grey 2]
   , Border.glow Color.grey 1
-  , width fill
+  , width (px 200)
   ]
   [text str]
 
@@ -103,7 +103,7 @@ errorMessage str = Add <| Stubborn <|
   , Background.color Color.salmon
   , mouseOver [Border.glow Color.darksalmon 2]
   , Border.glow Color.darksalmon 1
-  , width fill
+  , width (px 200)
   ]
   [paragraph [] [text str], el [alignRight] (text "✕")]
 

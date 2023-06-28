@@ -158,7 +158,6 @@ viewPagePreview {showDesc, showLabelAbove} {title, thumbnail, description, short
 
         label = paragraph [Font.size 16, Font.center, Font.bold, width (minimum previewImageWidth fill), centerX] [text title]
 
-        -- content = row [centerX] [img, desc]
         content = column [spacing 5] <| case desc of
             Nothing -> if showLabelAbove then [label, img] else [img, label]
             Just (Left fullDesc) ->
@@ -695,7 +694,7 @@ view model =
     let
         toastView toasts = mapAttribute ToastMsg
             <| inFront
-            <| el [alignBottom, alignRight, moveLeft 15, moveUp 15, Font.size 16, width (px 200)]
+            <| el [alignBottom, alignRight, moveLeft 15, moveUp 15, Font.size 16]
             <| Toast.view toasts
             
     in 
