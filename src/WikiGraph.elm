@@ -1,4 +1,4 @@
-module WikiGraph exposing (WikiGraphState, WikiGraphMsg, onMsg, update, subscription, init, view, reheat, badState)
+module WikiGraph exposing (WikiGraphState, WikiGraphMsg, onMsg, update, subscription, init, view, reheat)
 
 {-| A WikiGraph structure is kept to visualize the paths taken by the players.
 
@@ -18,7 +18,7 @@ import Browser.Events
 import Maybe.Extra
 import Basics.Extra
 import Dict.Extra
-
+import Either exposing (Either(..))
 
 import TypedSvg exposing (circle, rect, g, line, svg, image)
 import TypedSvg.Attributes as A
@@ -32,42 +32,62 @@ import Maybe.Extra
 import TypedSvg.Types exposing (FontWeight(..))
 import Zoom
 import Color exposing (Color)
+import List.Nonempty as Nonempty
 
--- We also keep a wikigraph during gameplay in order to visualize the routes taken by the players
+{-
+We also keep a wikigraph during gameplay in order to visualize the routes taken by the players
+
+Here a graph structure is kept to visualize the paths made by the players.
+
+The wikigraph is drawn by coloring edges according to the players that have traversed them,
+and nodes are placed according to force layout.
+
+Node labels are also situated according to the force model by using dummy label nodes
+
+-}
+
+
+{-|
+each node is either a destination node,
+a path node (in between two destination nodes),
+or a dummy label node
+
+(there is a dummy label node for each other node)
+-}
+type NodeData
+  = Destination Title
+  | PathNode {title : Title, goal : Title}  -- node in path linking destinations together
+  | Label NodeId
 
 {-| unique id for each node in the wikigraph
 
-must satisfy comparable typeclass
+must satisfy the crappy Elm comparable typeclass
 -}
 type alias NodeId =
     ( Title    -- title of this node's page
     , Title    -- title of the destination trying to be reached from this node
     -- if a player visits the same page in different legs during the game,
     -- we'll consider them different nodes
-    -- note: if nodeId is (a,b) where a==b then it is a destination node
     
     , Int -- each node has a sister label node that helps layout labels
       -- this will be 1 if it is a label node
     )
-
-
-type NodeData
-  = Destination Title
-  | PathNode {title : Title, goal : Title}  -- node in path linking destinations together
-  | Label NodeId
 
 {-| convert a node to a comparable type
 -}
 nodeId : NodeData -> NodeId
 nodeId n = case n of
   Destination title ->      (title,"",0)
-  PathNode {title, goal} ->    (title, goal, 0)
+  PathNode {title, goal} -> (title, goal, 0)
   Label (title, goal, _) -> (title, goal, 1)
 
 type alias Node = Force.Entity NodeId { data : NodeData, visitors : Set PeerId }
 
 -- edges are keyed by their source and target nodes
 type alias EdgeId = (NodeId, NodeId)
+
+edgeId : NodeData -> NodeData -> EdgeId
+edgeId source target = (nodeId source, nodeId target)
 
 type alias Edge =
     { source : NodeId
@@ -78,18 +98,20 @@ type alias Edge =
 type alias WikiGraph =
   { nodes : Dict NodeId Node
   , edges : Dict EdgeId Edge
-  , looseEnds : Dict PeerId NodeId        -- nodes at the tip of player paths that aren't linked up to any destination
   , destinations : List PagePreview       -- destination titles of the game
   , playerLocations : Dict PeerId NodeId  -- current locations of players
   , labelAnchors : Dict NodeId (Pos {})
+  , center : Pos {}
   }
 
+
 -- use WikiGraphState in the model to track the force simulation state
-type alias WikiGraphState =
+type WikiGraphState = WikiGraphState
   { graph : WikiGraph
   , sim : Force.State NodeId
-  , svgZoomPan : Zoom.Zoom
+  , zoomPan : Zoom.Zoom
   , highlightedNode : Maybe NodeId
+  , dimensions : {width : Float, height : Float}
   }
 
 getNode : NodeId -> WikiGraph -> Maybe Node
@@ -141,16 +163,10 @@ mkLabelNode pos n =
 mkEdge : NodeId -> NodeId -> Edge
 mkEdge source target = {source=source, target=target, visitors=Set.empty}
 
--- node centroid will be placed in middle of these dimensions
-dimensions = {width=1000, height=500}
-
-center = {x=dimensions.width/2, y=dimensions.height/2}
-
-
 {-| initialize a wikigraph with the destination nodes
 -}
-initWikiGraph : List PagePreview -> WikiGraph
-initWikiGraph dests =
+initWikiGraph : List PagePreview -> {x : Float, y : Float} -> WikiGraph
+initWikiGraph dests center =
     let
         destNodes = List.map (.title >> Destination) dests
           |> List.foldl
@@ -162,10 +178,10 @@ initWikiGraph dests =
           |> Tuple.second
     in
     { nodes = destNodes, edges = Dict.empty
-    , looseEnds = Dict.empty
     , destinations = dests
     , playerLocations = Dict.empty
     , labelAnchors = Dict.empty
+    , center=center
     }
 
 
@@ -174,13 +190,11 @@ initWikiGraph dests =
 updateWikiGraph : PeerId -> NodeId -> NodeId -> WikiGraph -> WikiGraph
 updateWikiGraph player source reached graph =
   let
-    edgeId = (source, reached)
-
     -- get the node that this player was last seen on
     -- so a their node can be placed near it
     lastPos = getNode source graph
       |> Maybe.map (\n -> {x=n.x, y=n.y})
-      |> Maybe.withDefault center
+      |> Maybe.withDefault graph.center
       |> \pos ->
         -- add a little noise so it doesn't break the force layout
         -- by laying one node directly on another
@@ -193,15 +207,6 @@ updateWikiGraph player source reached graph =
     updatedNode = getNode reached graph
       |> Maybe.withDefault (newNode lastPos <| PathNode {title=titleOf reached, goal=goalOf reached})
       |> \node -> {node | visitors=Set.insert player node.visitors}
-
-    -- update the set of loose end nodes if the player has landed on a new untouched page
-    newLooseEnds =
-      if isDestinationNode reached then
-        Dict.remove player graph.looseEnds
-      else if Maybe.Extra.isNothing (getNode reached graph) then
-        Dict.insert player reached graph.looseEnds
-      else
-        graph.looseEnds
     
   in
     { graph |
@@ -210,13 +215,12 @@ updateWikiGraph player source reached graph =
       , nodes=Dict.insert reached updatedNode graph.nodes
           |> Dict.update source (Maybe.map (\s -> {s | visitors=Set.insert player s.visitors}))
       -- update visitor list of the edge
-      , edges=Dict.update edgeId
+      , edges=Dict.update (source, reached)
           (\e -> case e of
             Just edge -> Just {edge | visitors=Set.insert player edge.visitors}
             Nothing -> Just <| let edge = mkEdge source reached in {edge | visitors=Set.singleton player}
           )
           graph.edges
-      , looseEnds=newLooseEnds
     }
 
 mkDestinationDummyLinks : WikiGraph -> List EdgeId
@@ -238,11 +242,23 @@ mkDestinationDummyLinks graph =
         |> List.filterMap
           (\(d1, d2) ->
             if isDangling d2.title then Just
-              ( nodeId (Destination d1.title)-- connect up the dangling destination node
-              , nodeId (Destination d2.title)-- with the destination before it
-              )
+              ( edgeId (Destination d1.title) (Destination d2.title) )
             else Nothing
           )
+
+{-| the 'loose ends' of the graph are any nodes that a player is currently on
+that have only a single edge
+
+we use these to draw dummy links such that players look like they're reaching towards the goal
+-}
+findLooseEnds : WikiGraph -> List NodeId
+findLooseEnds {playerLocations, edges} =
+  let
+    inhabitedNodes = Dict.values playerLocations
+    edgesAdjacent node = Dict.keys edges
+      |> List.Extra.count (\(source, target) -> source == node || target == node)
+  in List.filter (edgesAdjacent >> (==) 1) inhabitedNodes
+
 
 {-| construct new force layout simulation for the graph
 -}
@@ -259,7 +275,7 @@ newSimulation numIterations graph =
     -- so add dummy links between player nodes and their goal
     dummyLinks = List.map
       (\id -> configLink (linkDistance*3) (Just 0.01) (id, nodeId (Destination <| goalOf id)))
-      (Dict.values graph.looseEnds)
+      (findLooseEnds graph)
 
     edgeLinks = Dict.keys graph.edges
       |> List.map (configLink linkDistance Nothing)
@@ -270,79 +286,97 @@ newSimulation numIterations graph =
 
     -- to layout the labels for each node nicely, we have an extra "label node" for each real node
     labelEdges = Dict.keys graph.nodes
-      |> List.map (\id -> configLink linkDistance Nothing (id, mkLabelId id))
+      |> List.map (\id -> configLink (linkDistance*0.75) Nothing (id, mkLabelId id))
     labelNodes = List.map .target labelEdges
 
     forces =
       [ Force.customLinks 5 <| danglingDestLinks ++ dummyLinks ++ edgeLinks ++ labelEdges
       , Force.manyBody <| Dict.keys graph.nodes ++ labelNodes
-      , Force.center center.x center.y
+      , Force.center graph.center.x graph.center.y
       ]
   in Force.iterations numIterations (Force.simulation forces)
 
 
+
 {-| initialize the wikigraph with the destination list
 -}
-init : List PagePreview -> WikiGraphState
-init destinations =
-  let graph = initWikiGraph destinations
-    --TODO put an extent on the zoom's scale and pan
-      initZoom : Zoom.Zoom
-      initZoom = Zoom.init dimensions
-  in
+init : DestinationList -> {width : Float, height : Float} -> WikiGraphState
+init (DestinationList first second remaining) displayDimensions =
+  let graph = initWikiGraph (first :: second :: remaining)
+        {x=displayDimensions.width/2, y=displayDimensions.height/2}
+  in WikiGraphState
   { graph=graph
   , sim=newSimulation 10 graph
-  , svgZoomPan = initZoom
+  , zoomPan = Zoom.init displayDimensions
   , highlightedNode=Nothing
+  , dimensions=displayDimensions
   }
+
+{-| retrieve the most recent edge traversed by a player from their gamestate
+-}
+lastMovement : Either IncompletePath CompletePath -> (Maybe NodeId, NodeId)
+lastMovement path =
+  let
+    movement source target = (Just <| nodeId source, nodeId target)
+
+    fromIncompletePath {previousLegs, currentLeg} = 
+      let (Incomplete {start, steps, goal}) = currentLeg
+          previousLeg = List.Extra.last previousLegs
+            |> Maybe.map legOfComplete
+          previousStart = Maybe.map .start previousLeg
+          previousStep = previousLeg |> Maybe.andThen (.steps >> List.Extra.last)
+      in case (previousStart, previousStep, List.reverse steps) of
+        (_, _, currentPage :: previousPage :: _) ->
+          -- moved to a new page on the same leg
+          movement
+            (PathNode {title=previousPage, goal=goal})
+            (PathNode {title=currentPage, goal=goal})
+        (_, _, [currentPage]) ->
+          movement
+            (Destination start)
+            (PathNode {title=currentPage, goal=goal})
+          -- moving from the start of this leg to a new page
+        (_, Just lastLegStep, _) ->
+          -- the last move completed the previous leg
+          movement
+            (PathNode {title=lastLegStep, goal=start})
+            (Destination start)
+        (Just lastLegStart, _, _) ->
+          -- the last move completed the previous leg in one step
+            movement (Destination lastLegStart) (Destination start)
+        _ ->
+          -- player hasn't made any moves yet, and is still on the game starting page
+          (Nothing, nodeId <| Destination start)
+
+    fromCompletePath {legs} =
+      let (Complete {start, steps, goal}) = Nonempty.last legs
+      in case List.Extra.last steps of
+        Just previousMove ->
+          movement
+            (PathNode {title=previousMove, goal=goal})
+            (Destination goal)
+        Nothing ->
+          movement (Destination start) (Destination goal)
+
+  in Either.unpack fromIncompletePath fromCompletePath path
+  
 
 {-| update the wikigraph when a player moves from one title to another
 -}
-update : PeerId -> GameState -> Int -> WikiGraphState -> WikiGraphState
-update player {previousLegs, currentLeg} numIterations ({graph} as wgstate) =
-    let
-        -- each node is keyed by its title and the leg it was found on
-        -- so we need to do some work to figure out the correct node ids
-        -- for the player's most recent move
-
-        -- retrieve the last node of the last leg
-        lastLegNode = List.head previousLegs
-          |> Maybe.map legParts
-          |> Maybe.map
-            (\(start,steps,goal) -> case List.reverse steps of
-              [] -> Destination start
-              (step :: _) -> PathNode {title=step, goal=goal}
-            )
-
-        onNewLeg = List.isEmpty currentLeg.previousPages
-
-        reachedNode =
-          let {currentPage, goal} = currentLeg
-          in nodeId <|
-            if currentPage == goal || onNewLeg then Destination currentPage
-            else PathNode {title=currentPage, goal=goal} 
-
-        -- unless we are at the starting node, figure out the node that led to the current one
-        sourceNodeId = Maybe.map nodeId <| case currentLeg.previousPages of
-            -- player reached a destination and so we're starting a new leg
-            [] -> lastLegNode
-            -- player just moved from a destination
-            [previousPage] -> Just (Destination previousPage)
-
-            (previousPage :: _ :: _) -> Just <| PathNode {title=previousPage, goal=currentLeg.goal}
-
-    in case sourceNodeId of
-      Just id -> 
-        let newGraph = updateWikiGraph player id reachedNode graph
-        in {wgstate | graph=newGraph, sim = newSimulation numIterations newGraph}
-      Nothing ->
-          -- no new edge, but update player location because they're on a destination
-          { wgstate | graph={graph | playerLocations=Dict.insert player reachedNode graph.playerLocations}}
+update : PeerId -> Either IncompletePath CompletePath -> Int -> WikiGraphState -> WikiGraphState
+update player path numIterations (WikiGraphState ({graph} as wgstate)) = case lastMovement path of
+  (Just source, target) ->
+    let newGraph = updateWikiGraph player source target graph
+    in WikiGraphState {wgstate | graph=newGraph, sim = newSimulation numIterations newGraph}
+  (Nothing, currentNode) ->
+      -- no new edge, but update player location because they're on a destination
+      WikiGraphState
+        { wgstate | graph={graph | playerLocations=Dict.insert player currentNode graph.playerLocations}}
 
 {-|
 -}
 tickWikiGraphSim : WikiGraphState -> WikiGraphState
-tickWikiGraphSim ({graph, sim} as wgstate) =
+tickWikiGraphSim (WikiGraphState ({graph, sim} as wgstate)) =
   let
     -- add in label nodes to the sim
     labelNodes = Dict.toList graph.nodes
@@ -360,6 +394,7 @@ tickWikiGraphSim ({graph, sim} as wgstate) =
       (Just source, Just target) -> -(angleOf <| subtract target source)
       _ -> 0
     
+    -- we will rotate the graph about the start page node
     pivot = Maybe.map (\{x,y} -> {x=x, y=y}) start
       |> Maybe.withDefault {x=0, y=0}
 
@@ -380,41 +415,44 @@ tickWikiGraphSim ({graph, sim} as wgstate) =
         (\{x,y,data} -> Maybe.map (Basics.Extra.flip Tuple.pair {x=x,y=y}) (nodeOfLabel data))
       |> Dict.fromList
 
-  in
-  {wgstate | graph={graph | nodes=Dict.Extra.fromListBy .id nodes, labelAnchors=labelPosMap}, sim=newState}
+  in WikiGraphState
+    {wgstate | graph={graph | nodes=Dict.Extra.fromListBy .id nodes, labelAnchors=labelPosMap}, sim=newState}
 
 {-| start the force layout algorithm again
 -}
 reheat : Int -> WikiGraphState -> WikiGraphState
-reheat iters ({graph} as wg) = {wg | sim=newSimulation iters graph}
-
+reheat iters (WikiGraphState wg) = WikiGraphState
+  {wg | sim=newSimulation iters wg.graph}
 
 
 type WikiGraphMsg
   = HoveredWikiGraphNode (Maybe NodeId)
   | ZoomPan Zoom.OnZoom
-  | ForceLayout WikiGraphState
+  -- TODO change this message to ForceLayout { nodePositions : List (NodeId, Pos {}), labelPositions : (List NodeId Pos {})
+  | ForceLayout WikiGraphState -- TODO don't carry state explicitly like this in a msg
 
 {-| update the WikiGraphState according to the msg
 -}
 onMsg : WikiGraphMsg -> WikiGraphState -> WikiGraphState
-onMsg msg wg = case msg of
-  HoveredWikiGraphNode id -> {wg | highlightedNode=id}
-  ZoomPan zoomMsg -> {wg | svgZoomPan=Zoom.update zoomMsg wg.svgZoomPan}
+onMsg msg (WikiGraphState wg) = case msg of
+  HoveredWikiGraphNode id -> WikiGraphState {wg | highlightedNode=id}
+  ZoomPan zoomMsg -> WikiGraphState
+      {wg | zoomPan=Zoom.update zoomMsg wg.zoomPan}
+
   ForceLayout graph -> graph
 
 
 {-| step through the force simulation and return an updated wikigraph
 -}
 subscription : WikiGraphState -> Sub WikiGraphMsg
-subscription wg =
+subscription (WikiGraphState wg) =
     let forceLayoutTick =
           if Force.isCompleted wg.sim then Sub.none
           else Browser.Events.onAnimationFrame
-            (\_ -> ForceLayout <| tickWikiGraphSim wg)
+            (\_ -> ForceLayout <| tickWikiGraphSim (WikiGraphState wg))
         
         -- fire event when user drags or mousewheels on the svg
-        zoomSub = Zoom.subscriptions wg.svgZoomPan ZoomPan
+        zoomSub = Zoom.subscriptions wg.zoomPan ZoomPan
 
     in Sub.batch [forceLayoutTick, zoomSub]
       
@@ -435,7 +473,7 @@ hideAlpha = 0.1
 {-| for each edge in the wikigraph, color it according to all the players that have used it
 -}
 svgEdge : WikiGraphState -> ColorMap -> Edge -> Svg WikiGraphMsg
-svgEdge {graph} colormap edge =
+svgEdge (WikiGraphState {graph}) colormap edge =
   let
       source = getNode edge.source graph
           |> Maybe.map (\{x,y} -> {x=x, y=y})
@@ -483,19 +521,25 @@ coloredPath colors source target =
         <| List.indexedMap mkLine colors
 
 
+pathNodeRadius = 3
+playerLocationNodeRadius = 5
+destinationNodeRadius = 10
+
 {-| render a destination node as its thumbnail in a circle
 -}
-mkPictureNode : {url : String, width : Float, height : Float} -> Pos a -> Float -> Title -> Svg msg
-mkPictureNode img {x,y} radius title =
+mkPictureNode : {url : String, width : Float, height : Float, radius : Float, radiusColor : Color }
+  -> Pos a -> Title -> Svg msg
+mkPictureNode img {x,y} title =
   let id = encodeTitle title
-        |> String.replace "(" "lp"
-          >> String.replace ")" "rp"
-          >> String.replace "%" "pc"
+        |> String.toList
+        |> List.Extra.setIf (not << Char.isAlphaNum) 'p'
+        |> String.fromList
+
       sizeAttr =
         if img.width > img.height then
-          AInPx.height (radius*2)
+          AInPx.height (img.radius*2)
         else
-          AInPx.width (radius*2)
+          AInPx.width (img.radius*2)
       imgObj = image
         [ A.href img.url
         , AInPx.x 0
@@ -507,25 +551,25 @@ mkPictureNode img {x,y} radius title =
       bg = TypedSvg.pattern
         [ A.id <| id ++ "-pattern"
         , A.patternUnits TypedSvg.Types.CoordinateSystemUserSpaceOnUse
-        , AInPx.height (radius*2)
-        , AInPx.width (radius*2)
+        , AInPx.height (img.radius*2)
+        , AInPx.width (img.radius*2)
         ]
         [ imgObj ]
       
       circ = circle
-          [ AInPx.cx radius, AInPx.cy radius, AInPx.r radius
+          [ AInPx.cx img.radius, AInPx.cy img.radius, AInPx.r img.radius
           , attribute "fill" <| "url(#" ++ id ++ "-pattern)"
-          , A.stroke <| Paint Color.black
+          , A.stroke <| Paint img.radiusColor
           , AInPx.strokeWidth 2
           ] 
           []
-    in g [A.transform [Translate (x - radius) (y - radius)]] [TypedSvg.defs [] [bg], circ]
+    in g [A.transform [Translate (x - img.radius) (y - img.radius)]] [TypedSvg.defs [] [bg], circ]
 
 
 {-| draw a simple node circle, color it according to any players currently on it
 -}
 svgNode : WikiGraphState -> ColorMap -> Node -> Svg WikiGraphMsg
-svgNode {graph, highlightedNode} colormap node =
+svgNode (WikiGraphState {graph, highlightedNode}) colormap node =
   let playercolor = graph.playerLocations
         |> Dict.Extra.find (\player nodeid -> nodeid == node.id)
         |> Maybe.andThen (\(player, _) -> Dict.get player colormap)
@@ -544,9 +588,9 @@ svgNode {graph, highlightedNode} colormap node =
       isDestination = Maybe.Extra.isJust destinationPreview
 
       radius =
-        if isDestination then 10
-        else if playerIsHere then 5
-        else 3
+        if isDestination then destinationNodeRadius
+        else if playerIsHere then playerLocationNodeRadius
+        else pathNodeRadius
 
       -- the labels' angles are determined by the force layout using dummy nodes
       labelAnchor = Dict.get node.id graph.labelAnchors
@@ -576,7 +620,9 @@ svgNode {graph, highlightedNode} colormap node =
         else
           String.left maxChars nodeTitle ++ "..."
 
-      labelText = -- TODO add option to highlight and display titles of particular player
+      labelText =
+        -- TODO add option to highlight and display titles of particular player
+        -- and make other player paths transparent
         if not transparent then
           TypedSvg.text_
           [ A.fontFamily ["sans-serif"]
@@ -595,14 +641,16 @@ svgNode {graph, highlightedNode} colormap node =
 
       nodeCircle = case Maybe.andThen .thumbnail destinationPreview of
         Just src ->
-          mkPictureNode {url=src.src, width=src.width, height=src.height} node radius nodeTitle
+          mkPictureNode
+          {url=src.src, width=src.width, height=src.height, radius=radius, radiusColor=fillcolor}
+          node nodeTitle
         Nothing ->
           circle
             [ AInPx.r radius
             , A.fill <| Paint fillcolor
             , AInPx.cx node.x
             , AInPx.cy node.y
-            , onMouseEnter (HoveredWikiGraphNode <| Just node.id) -- TODO hovering over node highlights that player's path
+            , onMouseEnter (HoveredWikiGraphNode <| Just node.id)
             , onMouseLeave (HoveredWikiGraphNode Nothing)
             ]
             [ TypedSvg.title [] [ text nodeTitle ]]
@@ -618,7 +666,7 @@ svgNode {graph, highlightedNode} colormap node =
     ]
 
 view : WikiGraphState -> Dict PeerId { red : Float, green : Float, blue : Float, alpha : Float} -> Svg WikiGraphMsg
-view ({graph, svgZoomPan} as wikigraph) colors =
+view (WikiGraphState {graph, zoomPan, dimensions} as wikigraph) colors =
     let
         colormap = Dict.map (\_ {red,green,blue} -> Color.rgb red green blue) colors
 
@@ -627,6 +675,10 @@ view ({graph, svgZoomPan} as wikigraph) colors =
             |> g [A.class ["nodes"]]
         edgeGroups = Dict.values graph.edges
             |> List.map (svgEdge wikigraph colormap)
+
+        registerEvents = Zoom.events zoomPan ZoomPan
+
+        transform = Zoom.transform zoomPan
     in
     -- the svg element has fixed dimensions
     -- if we want it to be resizable then we would need to update the Zoom with the new dimensions
@@ -639,26 +691,11 @@ view ({graph, svgZoomPan} as wikigraph) colors =
         ([ A.width <| TypedSvg.Types.Percent 100
         , A.height <| TypedSvg.Types.Percent 100
         , A.fill <| Paint <| Color.rgb255 235 236 229
-        ]
-          ++ Zoom.events svgZoomPan ZoomPan -- dragging and mousewheel are registered on background rect
+        ] ++ registerEvents 
         )
         []
         -- the actual zoom and pan transforms are done on the drawn content
-      , g [Zoom.transform svgZoomPan] (edgeGroups ++ [nodeElements])
+      , g [transform] (edgeGroups ++ [nodeElements])
       ]
 
-badState : WikiGraphState -> Maybe String
-badState wg =
-  let
-    badNode = wg.graph.nodes
-      |> Dict.Extra.find (\_ {x,y} -> isNaN x || isNaN y)
-      |> Maybe.map Tuple.first
 
-    badLabel = wg.graph.labelAnchors
-      |> Dict.Extra.find (\_ {x,y} -> isNaN x || isNaN y)
-      |> Maybe.map Tuple.first
-    
-  in case (badNode, badLabel) of
-    (Just node, _) ->Just <| "Bad position found for node " ++ titleOf node
-    (_, Just node) -> Just <| "Bad label node position for node " ++ titleOf node
-    _ -> Nothing

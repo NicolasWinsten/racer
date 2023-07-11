@@ -1,52 +1,52 @@
 module Helpers exposing
-    ( cmdIf
-    , generateColorForNewPlayer
+    ( generateColorForNewPlayer
     , msToDisplayTime
-    , unwantedNamespaces
     , decodeTitle
     , encodeTitle
     , window
     , strToSeed
+    , computerColor
+    , colorPool
+    , when
     )
 
-import Array exposing (Array)
+import Array
 import Bitwise
 import Random
 import Element exposing (Color, rgb255, rgb, toRgb)
-import Dict
 import List.Extra
 import Random.Array
 import Url
 import Tuple
 
 
+
 decodeTitle : String -> Maybe String
 decodeTitle = Url.percentDecode >> Maybe.map (String.replace "_" " ")
 
-encodeTitle : String -> String
-encodeTitle = String.replace " " "_" >> Url.percentEncode
-
-{-| guard a Cmd with a boolean flag
-if the flag is False, then No-op
+{-| wikipedia articles are normalized by replacing spaces with underscores
 -}
-cmdIf : Bool -> Cmd msg -> Cmd msg
-cmdIf flag cmd = if flag then cmd else Cmd.none
+encodeTitle : String -> String
+encodeTitle = String.replace " " "_"
 
-colorPool : Array Color
+when : Bool -> (a -> a) -> a -> a
+when guard f = if guard then f else identity
+
+colorPool : List Color
 colorPool =
-    Array.fromList
-        [ rgb255 222 120 132
-        , rgb255 181 4 24
-        , rgb255 235 167 89
-        , rgb255 180 93 217
-        , rgb255 153 207 91
-        , rgb255 100 192 232
-        , rgb255 223 176 245
+        [ rgb255 203 192 173    -- dun
+        , rgb255 222 120 132    -- light coral
+        , rgb255 235 167 89     -- earth yellow (orange)
+        , rgb255 255 255 80    -- icterine (yellow)
+        , rgb255 180 220 127    -- pistachio
+        , rgb255 146 200 230    -- baby blue
+        , rgb255 223 176 245    -- mauve
         ]
+
+computerColor = rgb255 159 171 191
 
 randomColor : Random.Generator Color
 randomColor = let float = Random.float 0 0.75 in Random.map3 rgb float float float
-
 
 {-| given a list of player colors in use, generate an unused color
 -}
@@ -61,7 +61,7 @@ generateColorForNewPlayer playerColors seed_ =
 
         unusedColors = Array.filter
             (\c -> not <| List.member c playerColors)
-            colorPool
+            (Array.fromList colorPool)
 
     -- try and pick out an unused color from the pool
     -- otherwise randomly generate a color
@@ -78,21 +78,23 @@ strToSeed s =
     in
     Random.initialSeed hash
 
-
-msToDisplayTime : Int -> {min : Int, sec : Int, ms : Int}
-msToDisplayTime ms =
-    let
+{-| convert a number of milliseconds to a string in minutes:ss:mmm format
+-}
+msToDisplayTime : Int -> {displayMillis : Bool} -> String
+msToDisplayTime ms_ {displayMillis} =
+    let ms = abs ms_
         mins = ms // 60000
         secs = (ms // 1000) - (60*mins)
         msleft = ms - secs*1000 - mins*60000
-    in {min=mins, sec=secs, ms=msleft}
-
-
-{-| ignore the wikipedia pages from these namespaces
--}
-unwantedNamespaces =
-    [ "File", "Special", "Wikipedia", "Category", "Talk", "Help", "Template", "Template_talk", "Portal" ]
-
+    in
+    String.concat
+    [ if ms_ < 0 then "-" else ""
+    , String.padLeft 2 '0' (String.fromInt mins)
+    , ":"
+    , String.padLeft 2 '0' (String.fromInt secs)
+    , if displayMillis then "." ++ String.padLeft 3 '0' (String.fromInt msleft)
+        else ""
+    ]
 
 
 {-| give a sliding window of the given list of size two

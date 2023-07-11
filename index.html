@@ -23,7 +23,6 @@
     <div id="app"></div>
     <div style="text-align: right; font-style: italic; font-size: smaller;"> -- <a href="http://nicolaswinsten.com">Nicolas Winsten</a></div>
     
-    <!-- <script src="assets/peerjs.min.js"></script> -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script src="racer.js"></script>
 
@@ -38,7 +37,7 @@
         function createApp(seed, peerId) {
             app = Elm.Main.init({
                 node : document.getElementById("app"),
-                flags : {seed : seed, peerId : peerId} 
+                flags : {seed : seed, peerId : peerId}
             })
             setUpPorts()
         }
@@ -133,6 +132,7 @@
         }
 
         function setUpPorts() {
+            console.log("setting up ports for Elm app...")
 
             app.ports.copyToClipboard.subscribe(text => {
                 const type = "text/plain";
@@ -141,6 +141,9 @@
 
                 navigator.clipboard.write(data)
             })
+
+            app.ports.info.subscribe(console.log)
+            app.ports.error.subscribe(console.error)
 
             app.ports.sendData.subscribe(handleOutgoingData)
 
@@ -169,6 +172,7 @@
 
             app.ports.host.subscribe(() => {
                 // start listening for peer connections
+                console.log("Attempting to host game...")
                 isHost = true
                 clearClientConnections()
 

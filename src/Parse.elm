@@ -1,4 +1,4 @@
-module Parse exposing (viewNode)
+module Parse exposing (viewArticle)
 
 import Html.Parser exposing (Node(..))
 import Html exposing (..)
@@ -7,15 +7,15 @@ import Html.Events exposing (..)
 import Regex
 import Types exposing (..)
 import Helpers exposing (..)
-import Model exposing (..)
+import Maybe.Extra
 
 {-| convert parsed html of wiki article for our purposes
 
 strip out unnecessary bits
 disable external links
 -}
-viewNode : Html.Parser.Node -> Html Msg
-viewNode n =
+viewArticle : (Title -> msg) -> Html.Parser.Node -> Html msg
+viewArticle linkClickMsg n =
   let
       -- the html fetched from the wiki api has local urls in their links
       -- so we need to add https 
@@ -23,6 +23,8 @@ viewNode n =
           Regex.fromString "//upload.wikimedia.org"
       -- TODO look at fetching all the sections from the wiki api and styling it ourselves with a table of contents
       fixurls = Regex.replace imgurlstart (\_ -> "https://upload.wikimedia.org")
+
+      handleChildren = List.map (viewArticle linkClickMsg)
 
       attr2htmlattr (prop, val) = case prop of
           "src" -> attribute "src" (fixurls val)
@@ -32,7 +34,7 @@ viewNode n =
       
       -- make the straightforward conversion to Html object
       convert parsedNode = case parsedNode of
-          Element tag attrs children -> node tag (List.map attr2htmlattr attrs) (List.map viewNode children)
+          Element tag attrs children -> node tag (List.map attr2htmlattr attrs) (handleChildren children)
           Text s -> text s
           Comment _ -> text ""
   in
@@ -40,42 +42,34 @@ viewNode n =
       -- we want to reroute the wikilinks to onClick events
       Element "a" (( "href", link ) :: attrs) children -> -- TODO maybe we shouldn't assume href is the first attribute
           let
-            -- TODO use regex insteead
-              isUnwantedNamespace =
-                  List.any (\ns -> String.startsWith ("/wiki/" ++ ns ++ ":") link) unwantedNamespaces
-              clickLink = String.dropLeft 6 >> decodeTitle >> Maybe.map ClickedLink >> Maybe.withDefault NoOp
-          in
-          if isUnwantedNamespace then
-              -- do not allow File, Category, Wikipedia links to be clicked
-              Html.a (List.map attr2htmlattr attrs) (List.map viewNode children)
+            title = Just link
+                    |> Maybe.Extra.filter (String.startsWith "/wiki/")
+                    |> Maybe.andThen (String.dropLeft 6 >> decodeTitle)
+                    |> Maybe.Extra.filter isArticleNamespace
 
-          else if String.startsWith "/wiki/" link then
+          in
+          if String.startsWith "#" link then
+              -- catch other inpage reference tags such as section navigators
+              Html.a (href link :: List.map attr2htmlattr attrs) (handleChildren children)
+          else case title of
+            Just articleTitle -> 
               Html.a
                 [ Html.Attributes.style "color" "blue"
                 , Html.Attributes.style "text-decoration" "underline"
                 , href "#"
-                , onClick (clickLink link)
+                , onClick (linkClickMsg articleTitle)
                 ]
-                (List.map viewNode children)
-
-          else if String.startsWith "#" link then
-              -- catch other inpage reference tags such as section navigators
-              Html.a (href link :: List.map attr2htmlattr attrs) (List.map viewNode children)
-
-          else
-              Html.a (List.map attr2htmlattr attrs) (List.map viewNode children)
+                (handleChildren children)
+            Nothing -> 
+              Html.a (List.map attr2htmlattr attrs) (handleChildren children)
 
       Element "a" _ children ->
           -- try and catch external links and mask them
-          span [] (List.map viewNode children)
+          span [] (handleChildren children)
 
       -- hide edit sections
       Element "span" (( "class", "mw-editsection" ) :: _) _ ->
           text ""
-
-      -- underline the section links in the contents navigator
-    --   Element "span" (( "class", "toctext" ) :: attrs) children ->
-    --       span (style "text-decoration" "underline" :: List.map attr2htmlattr attrs) (List.map viewNode children)
 
       --ignore coordinates info for places
       Element "span" (( "id", "coordinates" ) :: _) _ ->
