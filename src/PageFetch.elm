@@ -1,4 +1,4 @@
-module PageFetch exposing (PageContent, getPage, getPreview)
+module PageFetch exposing (PageHtml, PageContent, WikiText, getPage, getPreview, getHtml, getWikiText)
 
 import Helpers exposing (..)
 import Html.Parser exposing (Node(..))
@@ -10,34 +10,21 @@ import List
 import Maybe
 import Parser
 import Result
-import Task exposing (Task)
 import Types exposing (..)
-import Model exposing (Msg)
 import Parse
+import Url.Builder as UrlB
+import Url
 
 {-
-   This module provides functionality for fetching the content of wikipages
+   This module provides functionality for fetching the content of wikipedia articles by their titles
 -}
+
 
 type alias PageHtml =
     { title : Title, html : String, sections : List Section }
 
-type alias PageContent a = Page a
+type alias PageContent msg = Page msg
 type alias PageSummary = PagePreview
-
--- TODO figure out how to retrieve the table of contents back
-
-resolver : Decoder a -> Response String -> Result String a
-resolver decoder response = case response of
-    BadUrl_ str -> Err str
-    Timeout_ -> Err "timeout"
-    NetworkError_ -> Err "network error"
-    BadStatus_ meta _ -> Err <|
-        String.concat [ String.fromInt meta.statusCode, " ", meta.statusText, " : ", meta.url ]
-    GoodStatus_ _ body ->
-        Decode.decodeString decoder body
-            |> Result.mapError (always <| "could not parse body of http response: \n" ++ body)
-
 
 pageDecoder : Decoder PageHtml
 pageDecoder =
@@ -52,17 +39,56 @@ tocSectionDecoder = Decode.map2 (\level anchor -> {level=level, anchor=anchor})
     (field "toclevel" Decode.int)
     (field "linkAnchor" Decode.string)
 
-requestPage : Title -> Task String PageHtml
-requestPage title =
-    Http.task
-        { method = "GET"
-        , headers = []
-        , body = Http.emptyBody
-        , url = "https://en.wikipedia.org/w/api.php?action=parse&prop=text|sections&redirects=true&format=json&origin=*&page=" ++ encodeTitle title
-        , timeout = Nothing
-        , resolver = Http.stringResolver <| resolver pageDecoder
+
+wikipedia = UrlB.crossOrigin "https://en.wikipedia.org"
+
+getHtml : Title -> Cmd (Result String PageHtml)
+getHtml title =
+    Http.get
+        { url = wikipedia ["w", "api.php"]
+            [ UrlB.string "action" "parse"
+            , UrlB.string "prop" "text|sections"
+            , UrlB.string "redirects" "true"
+            , UrlB.string "format" "json"
+            , UrlB.string "page" (encodeTitle title)
+            , UrlB.string "origin" "*"
+            ]
+            --"https://en.wikipedia.org/w/api.php?action=parse&prop=text|sections&redirects=true&format=json&origin=*&page=" ++ encodeTitle title
+        , expect = Http.expectJson (Result.mapError errorToString) pageDecoder
         }
 
+type alias WikiText = {title : Title, wikitext : String}
+
+wikiTextResponseDecoder : Decoder WikiText
+wikiTextResponseDecoder = Decode.at ["query", "pages", "0"]
+    <| ( Decode.map2 WikiText
+        (field "title" string)
+        (Decode.at ["revisions", "0", "slots", "main", "content" ] Decode.string)
+    )
+
+
+getWikiText : Title -> Cmd (Result String WikiText)
+getWikiText title =
+    Http.get
+        { --method = "GET"
+        -- , headers = []
+        -- , body = Http.emptyBody
+        url = wikipedia ["w", "api.php"]
+            [ UrlB.string "action" "query"
+            , UrlB.string "prop" "revisions|links"
+            , UrlB.int "redirects" 1
+            , UrlB.string "format" "json"
+            , UrlB.int "formatversion" 2
+            , UrlB.string "rvprop" "content"
+            , UrlB.string "rvslots" "main"
+            , UrlB.string "titles" (encodeTitle title)
+            , UrlB.int "plnamespace" 0
+            , UrlB.string "pllimit" "max"
+            , UrlB.string "origin" "*"
+            ]
+        -- , timeout = Nothing
+        , expect = Http.expectJson (Result.mapError errorToString) wikiTextResponseDecoder
+        }
 
 previewDecoder : Decoder PageSummary
 previewDecoder =
@@ -84,36 +110,34 @@ previewDecoder =
         (Decode.map (Maybe.andThen nonNullString) (Decode.maybe (field "description" string)))
 
 {-| request the redirected title, thumbnail, and description of a wikipedia article
+
+TODO also request the media list from the rest api to get backup images
 -}
-getPreview : Title -> Task String PageSummary
-getPreview title = Http.task
-        { method = "GET"
-        , headers = []
-        , body = Http.emptyBody
-        , url = "https://en.wikipedia.org/api/rest_v1/page/summary/" ++ encodeTitle title ++ "?redirect=true&origin=*"
-        , timeout = Just 5000
-        , resolver = Http.stringResolver <| resolver previewDecoder
+getPreview : Title -> Cmd (Result String PageSummary)
+getPreview title = Http.get
+        { url = wikipedia
+            ["api", "rest_v1", "page", "summary", Url.percentEncode <| encodeTitle title]
+            [UrlB.string "redirect" "true"]
+        , expect = Http.expectJson (Result.mapError errorToString) previewDecoder
         }
 
 {-|retrieve the and parse the HTML of the given wikipedia article -}
-getPage : Title -> Task String (PageContent Msg)
-getPage title =
-    requestPage title
-        |> Task.andThen
-            (\r -> case content r of
-                Ok pageContent -> Task.succeed pageContent
-                Err parseError -> Task.fail parseError
-            )
+getPage : (Title -> msg) -> Title -> Cmd (Result String (PageContent msg))
+getPage onLinkClick title =
+    getHtml title
+        |> Cmd.map (Result.andThen (content onLinkClick))
 
 
 {-| convert the api parse result to a parsed Node
+
+-- TODO this should be moved to parse.elm
 -}
-content : PageHtml -> Result String (PageContent Msg)
-content {title, html, sections} =
+content : (Title -> msg) -> PageHtml -> Result String (PageContent msg)
+content onLinkClick {title, html, sections} =
     case Html.Parser.run Html.Parser.allCharRefs html of
         Ok (node :: _) -> Ok <|
             { title = title
-            , content = Parse.viewNode node
+            , content = Parse.viewArticle onLinkClick node
             , sections = sections
             }
         
@@ -182,3 +206,24 @@ deadEndsToString deadEnds =
                     "BadRepeat at " ++ position
     in
     List.foldl (++) "" (List.map deadEndToString deadEnds)
+
+
+
+
+errorToString : Http.Error -> String
+errorToString err =
+    case err of
+        Http.Timeout ->
+            "Timeout exceeded"
+
+        Http.NetworkError ->
+            "Network error"
+
+        Http.BadStatus code ->
+            "Status " ++ String.fromInt code
+
+        Http.BadBody resp ->
+            "Unexpected response from api: " ++ resp
+
+        Http.BadUrl url ->
+            "Malformed url: " ++ url

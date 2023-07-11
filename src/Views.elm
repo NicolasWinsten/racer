@@ -23,6 +23,9 @@ import Loading
 import Html.Events
 import WikiGraph
 import Toast
+import Set
+import Dict exposing (Dict)
+
 
 {-
    This is where I keep all the ugly view code
@@ -179,6 +182,20 @@ viewPlayerName {hollow} {name, color} =
     in el ([Font.color color, Font.bold] ++ if hollow then hollowAttrs else [])
         (text name)
 
+{-| display a wikigraph
+-}
+viewWikiGraph : WikiGraph.WikiGraphState -> PlayerList a -> Element Msg
+viewWikiGraph wikigraph playerlist =
+            let playerColorMap = playerlist
+                    |> Dict.map (\_ {color} -> toRgb color )
+
+                
+            in Element.map Model.WikiGraphMsg
+                <| el [Border.width 2]
+                <| html 
+                <| WikiGraph.view wikigraph playerColorMap
+
+
 {-| welcome page
 -}
 viewWelcome : WelcomeOpts -> Element Msg
@@ -299,7 +316,12 @@ viewWelcome options =
                     []
                 , Li
                     ( paragraph []
-                        [text "Each round creates a real-time visualization of the current game's players and their paths. An example is provided below."]
+                        [text "Each round creates a real-time visualization of the current game's players and their paths."]
+                    )
+                    []
+                , Li
+                    ( paragraph []
+                        [text "An AI pathfinder will play along with you. An example of it in action is shown above."]
                     )
                     []
                 ]
@@ -330,9 +352,22 @@ viewWelcome options =
             , el [width (fillPortion 2)] displayPages
             ]
 
+        playerColorsStripe = row [width fill]
+            <| List.map (\c -> el [width fill, Background.color c, height (px 20)] (text ""))
+            <| colorPool
+
+        wikigraphDisplay = case options.wikigraph of
+            Just wikigraph ->
+                let colors = Dict.singleton "computer"
+                        {color=generateColorForNewPlayer [] options.seed, name="computer"}
+                in viewWikiGraph wikigraph colors
+            Nothing -> spinner
+
     in column [centerX, width (maximum 1200 fill)] 
         [ column [padding 30, spacing 10, centerX]
-            [ header
+            [ playerColorsStripe
+            , header
+            , el [centerX] wikigraphDisplay
             , pagebreak
             , row []
                 [ descSection
@@ -344,16 +379,7 @@ viewWelcome options =
                 , notesSection
                 ]
             ]
-        , image [centerX]
-            {src="assets/vizexample.png", description="wikigraph example"}
         ]
-    
-
-
-type ProgressDisplayTitle
-    = MetDestination Title
-    | CurrentLeg Title
-    | UnMetDestination Title
 
 {-| display ordered list of previous met destinations, the current leg, and the remaining destinations to hit
 
@@ -361,53 +387,62 @@ titles in the current leg can be clicked on to return to.
 
 display players above the page they're currently on, so you'll know if they're on your tail or ahead of you.
 -}
-viewProgress : InProgressGame -> Page a -> Bool -> Element Msg
-viewProgress game {sections} displayToc=
+viewProgress : {game : InProgressGame, page : Page a, displayToc : Bool, path : IncompletePath}
+    -> Element Msg
+viewProgress {game, page, displayToc, path} =
     let
-        state = game.self.gameState
+        destinations = destinationsToList game.destinations
 
-        -- get the destinations reached and the destinations needed
-        (metDestinations, remainingDestinations) = List.map .title game.destinations
-            |> List.Extra.splitAt (List.length state.previousLegs + 1)
+        -- retrieve the destinations the player has been to and hasn't been to
+        (destinationsMet, remainingDestinations) =
+            List.partition
+            (Basics.Extra.flip metDestination path)
+            (List.map .title destinations)
 
+        currentLeg = legOfIncomplete path.currentLeg
         -- titles in the player's current leg (including the last destination they reached)
-        currentLeg = legToList state.currentLeg
+        currentLegTitles = currentLeg.start :: currentLeg.steps
 
         -- list of titles in display order
         -- we're displaying the previously met destinations, the current leg, and the unmet destinations
         -- depending on whether the title is a destination or part of the current leg, display them differently
-        titleList = List.Extra.init metDestinations
+        titleList = List.Extra.init destinationsMet
             |> Maybe.withDefault []
-            |> \metDests ->
-                List.map MetDestination metDests
-                ++ List.map CurrentLeg currentLeg
-                ++ List.map UnMetDestination remainingDestinations
+            |> \metDests -> List.map Right metDests
+                ++ List.map Left currentLegTitles
+                ++ List.map Right remainingDestinations
 
         -- which title should the player be displayed over?
         -- indicates their progress in the game
-        playersMarkedTitle player =
-            let onSameLeg = state.currentLeg.goal == player.gameState.currentLeg.goal
-                playersPage = player.gameState.currentLeg.currentPage
-                playerMetDest dest = List.member dest (getMetDestinations player.gameState)
-            in
-            List.reverse titleList
-            |> List.Extra.find (\t -> case t of
-                    UnMetDestination dest -> playerMetDest dest
-                    CurrentLeg currTitle -> onSameLeg && currTitle == playersPage
-                    MetDestination dest -> not onSameLeg && playerMetDest dest
-                )
+        playersMarkedTitle title player = case player.gameState of
+            Just gameState ->
+                let 
+                    -- if the other player is on the same leg as us, display their color over the
+                    -- title they are currently on (if it exists)
+                    playerLeg = currentLegFromGameState gameState
+                    onSameLeg = currentLeg.goal == getGoal playerLeg
+                    playersPage = currentPageFromGameState gameState
+                    
+                    -- if the other player is not on the same leg, then display them over the last
+                    -- destination they met
+                    lastMetDest =
+                        if isGameComplete gameState then getGoal playerLeg
+                        else getStart playerLeg
+
+                in (onSameLeg && playersPage == title)
+                    || (lastMetDest == title && not onSameLeg)
+            Nothing -> False
 
         -- render the players that should be displayed above some title
-        -- TODO just display player color
         displayPlayersAbove title = Dict.values game.players
-            |> List.filter (\player -> playersMarkedTitle player == Just title)
+            |> List.filter (playersMarkedTitle title)
             |> List.map (\{color} -> el [width fill, height fill, Background.color color] (text ""))
             |> row [width fill, height (px 10)]
 
         -- table of contents section so that larger pages are easier to navigate
         toc =
             if displayToc then
-                List.filter (.level >> (==) 1) sections -- TODO allow expanding the sections
+                List.filter (.level >> (==) 1) page.sections -- TODO allow expanding the sections
                     |> List.map (\{anchor} -> link [Font.underline, Font.size 14] {url="#"++anchor, label=text <| String.replace "_" " " anchor})
                     |> column
                         [ spacing 5
@@ -420,7 +455,7 @@ viewProgress game {sections} displayToc=
             else none
 
         viewCurrentLegTitle title =
-            if title == state.currentLeg.currentPage then
+            if title == currentPage (Left path) then
                 -- hovering the mouse over the current page header will display a table of contents for navigation
                 el [Font.size 24, Font.bold, onMouseEnter (DisplayToc True), below toc] (text title)
             else
@@ -435,14 +470,12 @@ viewProgress game {sections} displayToc=
             let shortdescTip = basicToolTip below
                     <| Maybe.withDefault "no description"
                     <| Maybe.andThen .shortdescription 
-                    <| List.Extra.find (.title >> (==) title) game.destinations
+                    <| List.Extra.find (.title >> (==) title) destinations
             in el [Font.semiBold, shortdescTip] (text title)
-        viewTitle title =
-            let displayTitle = case title of
-                    CurrentLeg currTitle -> viewCurrentLegTitle currTitle
-                    MetDestination dest -> viewDestinationTitle dest
-                    UnMetDestination dest -> viewDestinationTitle dest
-            in column [Font.size 16, alignBottom] [displayPlayersAbove title, displayTitle]
+        viewTitle title = column [Font.size 16, alignBottom] <|
+            case title of
+                Left currTitle -> [displayPlayersAbove currTitle, viewCurrentLegTitle currTitle]
+                Right dest -> [displayPlayersAbove dest, viewDestinationTitle dest]
 
     in List.map viewTitle titleList
         |> List.intersperse (el [alignBottom] (rightarrow 16))
@@ -511,10 +544,11 @@ numDestinationsSlider num = Input.slider
 {-| display the lobby with a preview of the goals on the left side
 and the player list on the right side
 -}
-viewLobby : Lobby -> LobbyOpts -> Element Msg
-viewLobby lobby opts =
+viewLobby : Lobby -> {numDestinationsInput : Int} -> Element Msg
+viewLobby lobby {numDestinationsInput} =
     let
-        doneLoading = List.length lobby.destinations == lobby.numDestinations
+        doneLoading = Either.isRight lobby.destinations
+        destinations = Either.unpack identity destinationsToList lobby.destinations
         startButton =
             if doneLoading then
                 Input.button buttonStyle { onPress=Just ClickedStartGame, label=text "Start game"}
@@ -526,7 +560,7 @@ viewLobby lobby opts =
         hostInputSection = column [spacing 25]
             [ el [Font.bold, centerX] (text "You are the host")
             , gameIdView lobby.uuid
-            , numDestinationsSlider opts.numDestinationsInput
+            , numDestinationsSlider numDestinationsInput
             , row [spacing 5, width fill]
                 <| List.map (el [width fill])
                 <| List.map (el [centerX]) [ refreshLobbyButton, startButton ]
@@ -534,13 +568,13 @@ viewLobby lobby opts =
 
         playerList = column [Font.center, centerX, spacing 5]
             <| List.map (el [centerX])
-            <| List.map (viewPlayerName {hollow=False}) (allPlayers lobby)
+            <| List.map (viewPlayerName {hollow=False}) (lobbyPlayers lobby |> Dict.values)
     in
     row [width fill, padding 20, spacing 10, centerX]
         [ column [spacing 10, width fill]
             [ el [centerX, Font.size 32, Font.bold] (text "The Destinations")
             , el [centerX] (if doneLoading then none else spinner) 
-            , el [centerX] <| viewPagePreviews lobby.destinations
+            , el [centerX] <| viewPagePreviews destinations
             ]
         , column [ alignTop, alignRight, spacing 20, width fill ]
             [ el [centerX] <| if lobby.amHost then hostInputSection else text "Waiting for host to start game"
@@ -550,18 +584,45 @@ viewLobby lobby opts =
             ]
         ]
 
+{-| return a mapping of destination titles to the shortest player legs that reached them
+-}
+bestLegs : PostGame -> Dict Title (List {player : PeerId, leg : CompleteLeg, length : Int})
+bestLegs game =
+    let
+        getLength (Complete {steps}) = List.length steps + 1
+
+        shortestLength = List.map (.leg >> getLength)
+            >> List.minimum >> Maybe.withDefault Basics.Extra.maxSafeInteger
+
+        -- completed player legs, each annotated with the player info
+        playerLegs player = Maybe.map getCompletedLegs player.gameState
+            |> Maybe.withDefault []
+        
+
+        allCompletedLegs = postGamePlayers game
+            |> Dict.toList
+            |> List.concatMap (\(uuid, player) ->
+                List.map (\leg -> {player=uuid, leg=leg, length=getLength leg}) (playerLegs player)
+            ) 
+
+        getBestLegsFor title = List.filter (.leg >> legOfComplete >> .goal >> (==) title) allCompletedLegs
+            |> \legs -> List.filter (.length >> (==) (shortestLength legs)) legs
+
+    in destinationsToList game.destinations
+        |> List.map (\{title} -> (title, getBestLegsFor title))
+        |> Dict.fromList
 
 
 {-| display the shortest paths produced by all the players for each leg of the game
 
 color the paths with the player colors in between the thumbnails of the destinations
 -}
-bestLegsDisplay : InProgressGame -> Element msg
+bestLegsDisplay : PostGame -> Element msg
 bestLegsDisplay game =
     let
         -- view a leg as a row of titles and external links to wikipedia
-        viewLeg leg =
-            let (start, steps, goal) = legParts leg
+        viewLeg (Complete {start, steps, goal}) =
+            let
                 viewStep title = newTabLink [htmlAttribute (Html.Attributes.class "hoverUnderline")]
                     { url="https://en.wikipedia.org/wiki/" ++ encodeTitle title, label=text title }
 
@@ -572,41 +633,38 @@ bestLegsDisplay game =
                     |> \ells -> if List.isEmpty steps then [] else ells ++ [arr]
 
             in wrappedRow [width fill, spaceEvenly] els
+        
+        getPlayerColor id = postGamePlayers game
+            |> Dict.get id
+            |> Maybe.map .color
+            |> Maybe.withDefault EColor.black
 
-        getLength (player, leg) = List.length leg.previousPages
-        shortestLength = List.map getLength >> List.minimum >> Maybe.withDefault Basics.Extra.maxSafeInteger
-        allLegs = allPlayers game
-            |> List.concatMap (\player -> List.map (Tuple.pair player) (getCompletedLegs player.gameState))
-
-        getBestLegsFor : Title -> List (Player InGameAttributes, Leg)
-        getBestLegsFor title = List.filter (Tuple.second >> .goal >> (==) title) allLegs
-            |> \legs -> List.filter (getLength >> (==) (shortestLength legs)) legs
+        bestLegsDict = bestLegs game
                 
         viewBestLegsFor : PagePreview -> PagePreview -> Element msg
         viewBestLegsFor start goal =
-            let bestLegs = getBestLegsFor goal.title
-                legsView = bestLegs
-                    |> List.map (\(player, leg) ->
-                        el [Background.color player.color, width fill, paddingXY 10 3] (viewLeg leg))
+            let legs = Dict.get goal.title bestLegsDict |> Maybe.withDefault []
+                legsView = legs
+                    |> List.map (\{player, leg} ->
+                        el [Background.color (getPlayerColor player), width fill, paddingXY 10 3] (viewLeg leg))
                     |> column [spaceEvenly, width fill, centerY]
                 
-                numSteps = case bestLegs of
-                    (_, leg) :: _ ->
-                        let n = List.length leg.previousPages
-                        in text (String.fromInt n ++ " steps")
-                    [] -> none
+                numSteps = List.head legs
+                    |> Maybe.map (\leg ->
+                        el [Font.bold, padding 5, centerX]
+                        <| text (String.fromInt leg.length ++ " steps")
+                    )
+                    |> Maybe.withDefault none
 
             in row [width fill]
                 [ viewPagePreview {showLabelAbove=False, showDesc=None} start
-                -- , column [width fill, centerY, spacing 10]
-                --     [ el [centerX, Font.bold] numSteps, el [width fill, centerY] legsView ]
-                , if List.isEmpty bestLegs then paragraph [Font.center] [text "Waiting for player to connect these titles..."]
-                    else el [width fill, centerY, above <| el [Font.bold, centerX, padding 5] numSteps] legsView
+                , if List.isEmpty legs then paragraph [Font.center] [text "Waiting for player to connect these titles..."]
+                    else el [width fill, centerY, above numSteps] legsView
                 , viewPagePreview {showLabelAbove=False, showDesc=None} goal
                 ]
     in column [Font.size 14, spacing 25]
         <| List.intersperse pagebreak
-        <| List.map (Basics.Extra.uncurry viewBestLegsFor) (window game.destinations)
+        <| List.map (Basics.Extra.uncurry viewBestLegsFor) (window <| destinationsToList game.destinations)
 
 
 {-| render the post game review screen
@@ -614,43 +672,87 @@ bestLegsDisplay game =
 when player finishes or gives up, enter the game review screen where
 they can view the leaderboards and the best wikiladders from the players
 -}
-viewPostGame : InProgressGame -> WikiGraph.WikiGraphState -> Element Msg
+viewPostGame : PostGame -> WikiGraph.WikiGraphState -> Element Msg
 viewPostGame game wikigraph =
     let
-        players = allPlayers game
-        finishedPlayers = List.filter (.gameState >> isGameFinished) players
-        unfinishedPlayers = List.filter
-            (Basics.Extra.flip List.member finishedPlayers >> not) players
+        players = postGamePlayers game
+        (finishedPlayers, unfinishedPlayers) = List.partition
+            (\(_, {gameState}) -> Maybe.map isGameComplete gameState |> Maybe.withDefault False)
+            (Dict.toList players)
 
         byTimeLeaderboard =
-            let playerTime = (.gameState >> .finishTime >> Maybe.withDefault Basics.Extra.maxSafeInteger)
+            let
+                playerTime _ gameState = case gameState of
+                    Finished {time} -> (time, msToDisplayTime time {displayMillis=True})
+                    Unfinished _    -> (Basics.Extra.maxSafeInteger, "(not finished)")
+                    DNF {time}      -> (time, "(gave up)")
 
-                displayTimeOfPlayer {gameState} = case gameState.finishTime of
-                    Just timeInMs ->
-                        if isGameFinished gameState then
-                            let {min,sec,ms} = msToDisplayTime timeInMs
-                            in text <| String.concat [String.fromInt min, "m ", String.fromInt sec, ".", String.fromInt ms, "s"]
-                        else
-                            text "(gave up)"
-                    Nothing -> text "(not finished)"
-            in mkLeaderBoard "Time" playerTime displayTimeOfPlayer
+            in mkLeaderBoard "Time" playerTime
 
         byLengthLeaderboard =
-            let playersByLength = (.gameState >> numSteps)
-                displayNumSteps {gameState} = text <| String.fromInt (numSteps gameState)
-                    ++ if isGameFinished gameState then "" else " (not finished)"
-            in mkLeaderBoard "Total Path Length" playersByLength displayNumSteps
+            let
+                playersByLength id gameState =
+                    let num = numSteps gameState
+                    in case gameState of
+                        Finished _      -> (num, String.fromInt num)
+                        Unfinished _    -> (num, String.fromInt num ++ " (not finished)")
+                        DNF _           -> (num, String.fromInt num ++ " (gave up)")
+            in mkLeaderBoard "Total Path Length" playersByLength
+
+        byPagesTouchedLeaderboard =
+            let playersByTouchedTitles id gameState =
+                    let num = (getPath >> getTouchedTitles) gameState |> Set.size
+                    in (num, String.fromInt num)
+            in mkLeaderBoard "Total Articles Touched" playersByTouchedTitles
+
+        byScoreLeaderboard =
+            let
+                stepCost = 10000
+                bestLegBonus = 45000
+
+                bestLegsDict = bestLegs game
+                
+                calculateScore totalMs pathLength numBestLegs =
+                    totalMs + (pathLength * stepCost) - (numBestLegs * bestLegBonus)
+
+                displayScore totalMs pathLength numBestLegs =
+                    let show ms = msToDisplayTime ms {displayMillis=False}
+                        showWithMs ms = msToDisplayTime ms {displayMillis=True}
+                    in
+                    String.concat
+                    [ showWithMs totalMs 
+                    , " + (", String.fromInt pathLength, " × ", show stepCost, ")"
+                    , " - (", String.fromInt numBestLegs, " × ", show bestLegBonus, ")"
+                    , " = ", showWithMs (calculateScore totalMs pathLength numBestLegs)
+                    ] 
+
+                score id gameState =
+                    let pathLength = numSteps gameState
+                        numBestLegs = Dict.values bestLegsDict
+                            |> List.Extra.count (List.any <| .player >> (==) id)
+                    in case gameState of
+                        Finished {time} ->
+                            ( calculateScore time pathLength numBestLegs
+                            , displayScore time pathLength numBestLegs
+                            )
+                        _ -> (Basics.Extra.maxSafeInteger, "")
+            in mkLeaderBoard "Score" score
         
         -- create a table that displays the scores of the players by some metric
-        mkLeaderBoard : String -> (Player InGameAttributes -> Int) -> (Player InGameAttributes -> Element msg) -> Element msg
-        mkLeaderBoard headerTitle comparator scoreView =
-            let table_ = table [Font.alignRight, spacing 5]
-                    { data = List.sortBy comparator finishedPlayers ++ List.sortBy comparator unfinishedPlayers
+        mkLeaderBoard : String -> (PeerId -> GameState -> (Int, String)) -> Element msg
+        mkLeaderBoard headerTitle scorer =
+            let applyScorer (id, player) = case player.gameState of
+                    Just gameState -> scorer id gameState
+                    Nothing -> (Basics.Extra.maxSafeInteger, "")
+                scoreVal = applyScorer >> Tuple.first
+                scoreView = applyScorer >> Tuple.second >> text
+                table_ = table [Font.alignRight, spacing 5]
+                    { data = List.sortBy scoreVal finishedPlayers ++ List.sortBy scoreVal unfinishedPlayers
                     , columns =
                         [
                             { header=none
                             , width=fill
-                            , view=\player -> viewPlayerName {hollow=not player.connected} player
+                            , view=\(_, player) -> viewPlayerName {hollow=not player.connected} player
                             }
                             ,
                             { header=none
@@ -671,20 +773,14 @@ viewPostGame game wikigraph =
                 , table_
                 ]
 
-        svgWikiGraph =
-            let playerColorMap = game.players
-                    |> Dict.insert (Maybe.withDefault "" game.uuid) game.self
-                    |> Dict.map (\_ {color} -> toRgb color )
-            in Element.map Model.WikiGraphMsg
-                <| html 
-                <| WikiGraph.view wikigraph playerColorMap
+        svgWikiGraph = viewWikiGraph wikigraph (postGamePlayers game)
             
         newGameButton = Input.button buttonStyle {onPress=Just ClickedNewGame, label=text "New Game"}
 
     in column [centerX, spacing 15, padding 15]
         [ row [spaceEvenly, centerX]
-            [ byTimeLeaderboard, byLengthLeaderboard]
-        , el [centerX, Border.width 2] svgWikiGraph
+            [ byScoreLeaderboard, byTimeLeaderboard, byLengthLeaderboard, byPagesTouchedLeaderboard ]
+        , el [centerX] svgWikiGraph
         , column [spacing 10, centerX] [ el [Font.bold, centerX] (text "Best paths"), bestLegsDisplay game]
         , el [centerX] <| if game.amHost then newGameButton else (text "Waiting for host to start a new game...")
         ]
@@ -707,69 +803,73 @@ view model =
         
     -- while in game, display your progress at the top
     -- display the article content
-    InGame (Right page) game opts _ -> 
-        let
-            giveUpBtn = Input.button buttonStyle { onPress=Just GiveUp, label=text "Give Up"}
+    InGame loadingPage game opts _ _ -> case (loadingPage, game.self.path, opts.currentTime) of
+        (Right page, Just (path, startTime), Just currentTime) ->
+            let
+                giveUpBtn = Input.button buttonStyle { onPress=Just ClickedGiveUp, label=text "Give Up"}
 
-            timeDisplay =
-                let
-                    {min, sec} = msToDisplayTime (Time.posixToMillis opts.currentTime - Time.posixToMillis opts.startTime)
-                in 
-                text <| String.fromInt min ++ "m " ++ String.fromInt sec ++ "s"
+                timeDisplay = msToDisplayTime
+                    (Time.posixToMillis currentTime - Time.posixToMillis startTime)
+                    {displayMillis=False}
+                    |> text
 
-            -- we're only using ElmUI to create the top progress display while in game
-            -- trying to wrap the article content in ElmUI breaks its styling
-            progressbar = layout
-                [ Border.widthEach {bottom=2, top=0, left=0, right=0}
-                , Border.color EColor.darkgrey
-                , Background.color (rgb255 208 210 196)
-                , htmlAttribute (Html.Attributes.style "position" "-webkit-sticky")
-                , htmlAttribute (Html.Attributes.style "position" "sticky")
-                , htmlAttribute (Html.Attributes.style "top" "0")
-                , htmlAttribute (Html.Attributes.style "z-index" "100") -- the wikipedia infobox elements were appearing above the progress bar
-                , toastView model.toasts
-                ]
-                <| row [width fill, spacing 10, padding 10]
-                    [ viewProgress game page opts.displayToc
-                    , el [alignRight] timeDisplay
-                    , el [alignRight] giveUpBtn
+                -- we're only using ElmUI to create the top progress display while in game
+                -- trying to wrap the article content in ElmUI breaks its styling
+                progressbar = layout
+                    [ Border.widthEach {bottom=2, top=0, left=0, right=0}
+                    , Border.color EColor.darkgrey
+                    , Background.color (rgb255 208 210 196)
+                    , htmlAttribute (Html.Attributes.style "position" "-webkit-sticky")
+                    , htmlAttribute (Html.Attributes.style "position" "sticky")
+                    , htmlAttribute (Html.Attributes.style "top" "0")
+                    , htmlAttribute (Html.Attributes.style "z-index" "100") -- the wikipedia infobox elements were appearing above the progress bar
+                    , toastView model.toasts
                     ]
+                    <| row [width fill, spacing 10, padding 10]
+                        [ viewProgress {game=game, page=page, path=path, displayToc=opts.displayToc}
+                        , el [alignRight] timeDisplay
+                        , el [alignRight] giveUpBtn
+                        ]
 
-            articleContent = Html.div
-                [ Html.Events.onMouseEnter (DisplayToc False) -- put the table of contents navigator away when mouse is back on page
-                , Html.Attributes.style "margin" "0 5%"
-                ]
-                [page.content]
+                articleContent = Html.div
+                    [ Html.Events.onMouseEnter (DisplayToc False) -- put the table of contents navigator away when mouse is back on page
+                    , Html.Attributes.style "margin" "0 5%"
+                    ]
+                    [page.content]
 
-            playerCurrentlyHere player = player.gameState.currentLeg.currentPage == page.title
-            -- get all the players that are currently on the same page as you
-            playersHere = Dict.values game.players
-                |> List.filter playerCurrentlyHere
-                |> List.filter .connected
-                |> List.map 
-                    (\({name} as p) -> el [basicToolTip below (name ++ " is on this page")] <| viewPlayerName {hollow=False} p)
+                playerCurrentlyHere player =
+                    Maybe.map currentPageFromGameState player.gameState == Just page.title
+                -- get all the players that are currently on the same page as you
+                playersHere = Dict.values game.players
+                    |> List.filter playerCurrentlyHere
+                    |> List.filter .connected
+                    |> List.map 
+                        (\({name} as p) -> el [basicToolTip below (name ++ " is on this page")] <| viewPlayerName {hollow=False} p)
 
-            -- get all the players that aren't here but previously were
-            playersThatWereHere =
-                let beenHere {gameState} = gameState.currentLeg :: gameState.previousLegs
-                        |> List.concatMap legToList
-                        |> List.member page.title
-                in Dict.values game.players
-                    |> List.filter beenHere
-                    |> List.filter (not << playerCurrentlyHere)
-                    |> List.map
-                        (\({name} as p) -> el [basicToolTip below (name ++ " was on this page")] <| viewPlayerName {hollow=True} p)
+                -- get all the players that aren't here but previously were
+                playersThatWereHere =
+                    let beenHere {gameState} = (Maybe.map (getPath >> getTouchedTitles) gameState)
+                            |> Maybe.withDefault Set.empty
+                            |> Set.member page.title 
+                    in Dict.values game.players
+                        |> List.filter beenHere
+                        |> List.filter (not << playerCurrentlyHere)
+                        |> List.map
+                            (\({name} as p) -> el [basicToolTip below (name ++ " was on this page")] <| viewPlayerName {hollow=True} p)
 
-            -- display the names of any players that have visited the page you're on
-            playerList = layoutWith {options=[noStaticStyleSheet]} [] <| row [spacing 10, padding 10]
-                <| playersHere ++ playersThatWereHere
+                -- display the names of any players that have visited the page you're on
+                playerList = layoutWith {options=[noStaticStyleSheet]} [] <| row [spacing 10, padding 10]
+                    <| playersHere ++ playersThatWereHere
 
-        in
-        -- the wikipage article body using external styling, so mixing it in with Elm UI breaks it,
-        -- so unfortunately I can't align the body with Elm UI
-        Html.div [] [progressbar, playerList, articleContent]
+            in
+            -- the wikipage article body using external styling, so mixing it in with Elm UI breaks it,
+            -- so unfortunately I can't align the body with Elm UI
+            Html.div [] [progressbar, playerList, articleContent]
 
-    InGame (Left title) _ _ _ -> layout [toastView model.toasts] <|
-        el [padding 20] (text ("Fetching " ++ title ++ "..."))
+        (Left title, _, _) -> layout [toastView model.toasts] <|
+            el [padding 20] (text ("Fetching " ++ title ++ "..."))
 
-    PostGameReview game wikigraph -> layout [toastView model.toasts] (viewPostGame game wikigraph)
+        _ -> layout [toastView model.toasts] <|
+            el [padding 20] (text "Something went wrong...")
+
+    PostGameReview game wikigraph _ -> layout [toastView model.toasts] (viewPostGame game wikigraph)

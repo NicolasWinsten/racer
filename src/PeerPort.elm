@@ -10,15 +10,46 @@ port module PeerPort exposing
     , sendData
     , broadcast
     , directedMessage
+    , PeerMsg(..)
+    , LobbyMessage
+    , GameMessage
     )
 
 
 import Json.Decode as Decode exposing (Decoder, Value, field)
 import Json.Encode as Encode
-import Model exposing (..)
 import Types exposing (..)
 import Element exposing (Color, toRgb, rgb)
 import Json.Decode as Decode
+import List.Nonempty as Nonempty exposing (Nonempty(..))
+import Set
+import Either exposing (Either(..))
+import Either.Decode
+import Time
+
+-- TODO move external javascript logic into this module 
+-- TODO use generated UUID rather than brokering ID so users can reconnect to the game
+
+type alias LobbyMessage = { players : PlayerList {}, destinations : Maybe DestinationList }
+
+type alias GameMessage =
+    { players : PlayerList {gameState : Maybe GameState, connected : Bool}
+    , destinations : DestinationList
+    }
+
+{-| types of messages sent to other players P2P
+
+-}
+type PeerMsg
+    -- send lobby info when making changes to the lobby, or to joining players
+    = LobbyInfoMessage LobbyMessage
+    -- send gamestate info to players to start the game
+    | GameStateMessage GameMessage
+    | PlayerLegUpdate PeerId (Either IncompleteLeg CompleteLeg) Time.Posix -- uuid, updated leg, time when it was reached
+    | PeerConnected PeerId String       -- uuid, username
+    | PeerDisconnected PeerId           -- uuid
+    | HostLost      -- connection to host lost
+    | Error String  -- error with peerJS
 
 
 {-| broadcast a message to all peers
@@ -95,65 +126,143 @@ decodeColor = Decode.map3 rgb
     (field "g" Decode.float)
     (field "b" Decode.float)
 
-encodePlayer : Player InLobbyAttributes -> Value
+encodeTime : Time.Posix -> Value
+encodeTime = Time.posixToMillis >> Encode.int
+
+decodeTime : Decoder Time.Posix
+decodeTime = Decode.map Time.millisToPosix Decode.int
+
+
+encodePlayer : Player {} -> Value
 encodePlayer {name, color} = Encode.object [("name", Encode.string name), ("color", encodeColor color)]
 
-decodePlayer : Decoder (Player InLobbyAttributes)
+decodePlayer : Decoder (Player {})
 decodePlayer = Decode.map2 (\name color -> {name=name, color=color})
     (field "name" Decode.string)
     (field "color" decodeColor)
 
 
-encodePlayerWithGameState : Player InGameAttributes -> Value
-encodePlayerWithGameState {name, color, gameState, connected} =
+encodeLeg : Leg -> Value
+encodeLeg {start, steps, goal} = Encode.list identity
+    [ Encode.string start, Encode.list Encode.string steps, Encode.string goal]
+
+decodeLeg : Decoder Leg
+decodeLeg = Decode.map3 (\start steps goal -> {start=start, steps=steps, goal=goal})
+    (Decode.index 0 Decode.string)
+    (Decode.index 1 <| Decode.list Decode.string)
+    (Decode.index 2 Decode.string)
+
+encodeCompleteLeg : CompleteLeg -> Value
+encodeCompleteLeg (Complete leg) = Encode.object [("complete", encodeLeg leg)]
+
+decodeCompleteLeg : Decoder CompleteLeg
+decodeCompleteLeg = field "complete" decodeLeg |> Decode.map Complete
+
+encodeIncompleteLeg : IncompleteLeg -> Value
+encodeIncompleteLeg (Incomplete leg) = Encode.object [("incomplete", encodeLeg leg)]
+
+decodeIncompleteLeg : Decoder IncompleteLeg
+decodeIncompleteLeg = field "incomplete" decodeLeg |> Decode.map Incomplete
+
+encodeGameState : GameState -> Value
+encodeGameState game =
     let
-        encodeLeg : Leg -> Value
-        encodeLeg {previousPages, currentPage, goal} = Encode.object
-            [ ("previous", Encode.list Encode.string previousPages)
-            , ("current", Encode.string currentPage)
-            , ("goal", Encode.string goal)
+        encodeTitleSet titles = Encode.set Encode.string titles
+
+        encodeCompletePath {touchedTitles, legs} = Encode.object
+            [ ("legs", Encode.list encodeCompleteLeg (Nonempty.toList legs))
+            , ("touched", encodeTitleSet touchedTitles)
             ]
 
-        encodeGameState : GameState -> Value
-        encodeGameState {previousLegs, currentLeg, remainingDestinations, finishTime} =
-            Encode.object
-                [ ("completed", Encode.list encodeLeg previousLegs)
-                , ("current", encodeLeg currentLeg)
-                , ("remaining", Encode.list Encode.string remainingDestinations)
-                , ("time", maybeEncode Encode.int finishTime)
-                ]
-    in Encode.object
+        encodeIncompletePath {previousLegs, currentLeg, remainingDestinations, touchedTitles} = Encode.object
+            [ ("previous", Encode.list encodeCompleteLeg previousLegs)
+            , ("current", encodeIncompleteLeg currentLeg)
+            , ("remaining", Encode.list Encode.string remainingDestinations)
+            , ("touched", encodeTitleSet touchedTitles)
+            ]
+    in case game of
+        Finished {path, time} -> Encode.object [("path", encodeCompletePath path), ("time", Encode.int time)]
+            |> Tuple.pair "finished" >> List.singleton >> Encode.object
+        
+        Unfinished {path, startTime} -> Encode.object
+            [ ("path", encodeIncompletePath path)
+            , ("startTime", encodeTime startTime)
+            ]
+            |> Tuple.pair "unfinished" >> List.singleton >> Encode.object
+        
+        DNF {path, time} -> Encode.object [("path", encodeIncompletePath path), ("time", Encode.int time)]
+            |> Tuple.pair "dnf" >> List.singleton >> Encode.object
+
+
+decodeGameState : Decoder GameState
+decodeGameState =
+    let
+        decodeNonEmptyList dec = Decode.list dec |> Decode.andThen
+            (\legs -> case legs of
+                head :: tail -> Decode.succeed <| Nonempty head tail
+                [] -> Decode.fail "Empty list"
+            )
+
+        decodeTitleSet = Decode.list Decode.string |> Decode.map Set.fromList
+
+        decodeCompletePath = Decode.map2 (\legs touched -> {legs=legs, touchedTitles=touched})
+            (field "legs" <| decodeNonEmptyList decodeCompleteLeg)
+            (field "touched" decodeTitleSet)
+        
+        decodeIncompletePath = Decode.map4
+            (\prevLegs currLeg remaining touched->
+                {previousLegs=prevLegs, currentLeg=currLeg, remainingDestinations=remaining, touchedTitles=touched}
+            )
+            (field "previous" <| Decode.list decodeCompleteLeg)
+            (field "current" decodeIncompleteLeg)
+            (field "remaining" <| Decode.list Decode.string)
+            (field "touched" decodeTitleSet)
+
+    in Decode.oneOf
+        [ field "finished" <| Decode.map2 (\path time -> Finished {path=path, time=time})
+            (field "path" decodeCompletePath)
+            (field "time" Decode.int)
+
+        , field "unfinished" <| Decode.map2 (\path time -> Unfinished {path=path, startTime=time})
+            (field "path" decodeIncompletePath)
+            (field "startTime" decodeTime)
+
+        , field "dnf" <| Decode.map2 (\path time -> DNF {path=path, time=time})
+            (field "path" decodeIncompletePath)
+            (field "time" Decode.int)
+        ]
+
+encodePlayerWithGameState : Player {gameState : Maybe GameState, connected : Bool} -> Value
+encodePlayerWithGameState {name, color, gameState, connected} =
+    Encode.object
         [ ("name", Encode.string name)
         , ("color", encodeColor color)
-        , ("gamestate", encodeGameState gameState)
+        , ("gamestate", maybeEncode encodeGameState gameState)
         , ("connected", Encode.bool connected)
         ]
 
-decodePlayerWithGameState : Decoder (Player InGameAttributes)
-decodePlayerWithGameState =
-    let
-        legDecoder : Decoder Leg
-        legDecoder = Decode.map3 (\previous current goal -> {previousPages=previous, currentPage=current, goal=goal})
-            (field "previous" (Decode.list Decode.string))
-            (field "current" Decode.string)
-            (field "goal" Decode.string)
-
-        gameStateDecoder : Decoder GameState
-        gameStateDecoder = Decode.map4
-            (\completed currentLeg remainingDests time -> {previousLegs=completed, currentLeg=currentLeg, remainingDestinations=remainingDests, finishTime=time})
-            (field "completed" (Decode.list legDecoder))
-            (field "current" legDecoder)
-            (field "remaining" (Decode.list Decode.string))
-            (field "time" (Decode.nullable Decode.int))
-
-    in Decode.map4
+decodePlayerWithGameState : Decoder (Player {gameState : Maybe GameState, connected : Bool})
+decodePlayerWithGameState = Decode.map4
         (\name color gameState connected ->
             {name=name, color=color, gameState=gameState, connected=connected}
         )
         (field "name" Decode.string)
         (field "color" decodeColor)
-        (field "gamestate" gameStateDecoder)
+        (field "gamestate" (Decode.maybe decodeGameState))
         (field "connected" Decode.bool)
+
+encodeDestinationList : DestinationList -> Value
+encodeDestinationList (DestinationList first second remaining) = Encode.object
+    [ ("first", encodePagePreview first)
+    , ("second", encodePagePreview second)
+    , ("remaining", Encode.list encodePagePreview remaining)
+    ]
+
+decodeDestinationList : Decoder DestinationList
+decodeDestinationList = Decode.map3 DestinationList
+    (field "first" decodePagePreview)
+    (field "second" decodePagePreview)
+    (field "remaining" (Decode.list decodePagePreview))
 
 {-|encode a PeersMsg into JSON that can be sent over to a peer
 
@@ -167,7 +276,7 @@ encodeMsg msg = case msg of
             [
                 ("lobby", Encode.object
                     [ ("players", Encode.dict identity encodePlayer players)
-                    , ("destinations", Encode.list encodePagePreview destinations)
+                    , ("destinations", maybeEncode encodeDestinationList destinations)
                     ]
                 )
             ]
@@ -177,17 +286,23 @@ encodeMsg msg = case msg of
             [
                 ("gamestate", Encode.object
                     [ ("players", Encode.dict identity encodePlayerWithGameState players)
-                    , ("destinations", Encode.list encodePagePreview destinations)
+                    , ("destinations", encodeDestinationList destinations)
                     ]
                 )
             ]
         
-    PlayerReachedTitle uuid title time -> Encode.object
-        [ ("titlereach"
+    PlayerLegUpdate uuid leg time ->
+        let
+            encodedLeg = case leg of
+                Left incomplete -> encodeIncompleteLeg incomplete
+                Right complete -> encodeCompleteLeg complete
+        in
+        Encode.object
+        [ ("legupdate"
         , Encode.object
             [ ("uuid", Encode.string uuid)
-            , ("title", Encode.string title)
-            , ("time", Encode.int time)
+            , ("leg", encodedLeg)
+            , ("time", encodeTime time)
             ]
         )
         ]
@@ -202,18 +317,18 @@ decodeMsg val =
             lobbyInfoDecoder = field "lobby" <|
                 Decode.map2 (\players destinations -> LobbyInfoMessage {players=players, destinations=destinations})
                     (field "players" (Decode.dict decodePlayer))
-                    (field "destinations" (Decode.list decodePagePreview))
+                    (field "destinations" <| Decode.maybe decodeDestinationList)
             
             gameInfoDecoder = field "gamestate" <|
                 Decode.map2 (\players destinations -> GameStateMessage {players=players, destinations=destinations})
                     (field "players" (Decode.dict decodePlayerWithGameState))
-                    (field "destinations" (Decode.list decodePagePreview))
+                    (field "destinations" decodeDestinationList)
 
-            titleReachDecoder = field "titlereach" <|
-                Decode.map3 (\uuid title time -> PlayerReachedTitle uuid title time)
+            legUpdateDecoder = field "legupdate" <|
+                Decode.map3 (\uuid leg time -> PlayerLegUpdate uuid leg time)
                     (field "uuid" Decode.string)
-                    (field "title" Decode.string)
-                    (field "time" Decode.int)
+                    (field "leg" <| Either.Decode.either decodeIncompleteLeg decodeCompleteLeg)
+                    (field "time" decodeTime)
             
             playerConnectDecoder = field "playerconnected" <|
                 Decode.map2 (\uuid name -> PeerConnected uuid name)
@@ -236,7 +351,7 @@ decodeMsg val =
                     ( Decode.oneOf
                         [ lobbyInfoDecoder
                         , gameInfoDecoder
-                        , titleReachDecoder
+                        , legUpdateDecoder
                         , playerConnectDecoder
                         , playerDisconnectDecoder
                         , hostLostDecoder
@@ -253,12 +368,12 @@ port receiveDataPeerJS : (Value -> msg) -> Sub msg
 
 {-| subscription for any data coming in from PeerJS
 -}
-receiveData : Sub Msg
+receiveData : Sub PeerMsg
 receiveData = 
     let
         handleValue val = case decodeMsg val of
             Ok msg -> msg
             Err decodeErr -> Error (Decode.errorToString decodeErr)
 
-    in receiveDataPeerJS (handleValue >> PeerMsg)
+    in receiveDataPeerJS handleValue
 
