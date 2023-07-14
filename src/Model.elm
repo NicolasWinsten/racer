@@ -8,6 +8,7 @@ import WikiGraph exposing (WikiGraphState)
 import Toast exposing (Toasts)
 import PeerPort
 import PathFinder
+import PageFetch
 
 {- Model and Msg types, along with some other helper types -}
 
@@ -34,6 +35,7 @@ type Phase
     | InGame (Either Title (Page Msg)) InProgressGame
         { currentTime : Maybe Time.Posix
         , displayToc : Bool
+        , pagefetcher : PageFetch.PageFetcher
         }
         WikiGraphState
         PathFinder.Model
@@ -47,7 +49,7 @@ type alias Model = {phase : Phase, toasts : Toasts}
 -}
 type TimeDependentMsg
     = PathFinderRequest PathFinder.Msg
-    | LoadedPage Title (Result String (Page Msg))
+    | LoadedPage (Page Msg)
 
 type Msg
     = LoadedDestinationPreview Title (Result String PagePreview)
@@ -65,6 +67,7 @@ type Msg
     | WikiGraphMsg WikiGraph.WikiGraphMsg
     | AnimationFrame Time.Posix
     | PeerMsg PeerPort.PeerMsg
+    | PageFetchMsg PageFetch.Msg
     | ToastMsg Toast.ToastMsg
     | CopyToClipboard String
     | DisplayToc Bool

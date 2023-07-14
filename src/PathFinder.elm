@@ -13,6 +13,8 @@ import Helpers exposing (..)
 import Dict exposing (Dict)
 import Deque exposing (Deque)
 import Log
+import List.Extra
+
 
 {-|
 
@@ -199,6 +201,7 @@ countOccurrences target content =
     targetRegex =
       target
         |> escapeForRegex
+        |> \t -> "\\b" ++ t ++ "\\b"
         |> Regex.fromStringWith { caseInsensitive = True, multiline = False }
         |> Maybe.withDefault Regex.never
   in
@@ -225,20 +228,22 @@ countTitleOccurrences : Title -> String -> Int
 countTitleOccurrences title text =
   let
     (base, disamb) = splitDisamb title
-    target = " " ++ base -- idk why adding the space helps so much, too lazy to investigate
+    target = base -- idk why adding the space helps so much, too lazy to investigate
 
-    dontCountOccurrences =
-          String.startsWith "." base -- avoid high level domains like .com or .wiki
-          || List.member base ["Wikipedia", "Wikimedia", "Wikisource", "Wikidata"] -- these show up on every page basically
-          || String.length base < 6 -- title should be distinct enough so that we don't get a lot of false positives
-    
-    -- should we count the occurrences of the disambiguation tag?
     disambOccurrences = case disamb of
       Just tag -> countTitleOccurrences tag text
       Nothing -> 0
 
-  in (if dontCountOccurrences then 0 else countOccurrences target text)
-  + (disambOccurrences // 10)
+    dontCountOccurrences =
+          String.startsWith "." base -- avoid high level domains like .com or .wiki
+          --|| List.member base ["Wikipedia", "Wikimedia", "Wikisource", "Wikidata"] -- these show up on every page basically
+          || String.length base < 6 -- title should be distinct enough so that we don't get a lot of false positives
+          || (Maybe.Extra.isJust disamb && disamb /= Just "disambiguation" && disambOccurrences == 0)
+    
+    -- should we count the occurrences of the disambiguation tag?
+
+  in (if dontCountOccurrences then 0 else countOccurrences target text + (disambOccurrences // 10))
+  -- + (disambOccurrences // 10)
 
 
 -- rather than getHTML we should get the wikitext since it is smaller
@@ -362,44 +367,32 @@ processArticle route page state =
   let
     -- linkSet = linkSetFromList <| List.filter isCandidate <| getLinksOnHtml html
     -- linkSet = {set=page.links, size=Set.size page.links}
-    linksOnArticle = Set.fromList (getLinksOnWikiText page.wikitext)
+    linksOnArticle = getLinksOnWikiText page.wikitext
+    linkSet = Set.fromList linksOnArticle
     visitedTitleSet = Set.insert page.title state.visited
     shouldFollow link = (not <| Set.member link visitedTitleSet)
-      && (isCandidate link) --|| not (isCandidate state.goal))
+      && (isCandidate link)
 
     articleStats = gatherArticleStats
       { titleText=page.wikitext
       , goal=state.goal.title
       , linksOnGoal=state.linksOnGoal
-      , linksOnTitle=linksOnArticle
+      , linksOnTitle=linkSet
       }
 
   in
   {state
-  | visited=Set.union linksOnArticle visitedTitleSet
-  , linksToInspect=Set.foldl
+  | visited=Set.union linkSet visitedTitleSet
+  , linksToInspect=List.foldl
       (\link -> 
         if shouldFollow link then Deque.pushBack
           {title=link, resolvedPath=route, parent=page, parentStats=articleStats}
         else identity
       )
       state.linksToInspect
-      linksOnArticle
+      (List.Extra.unique linksOnArticle)
   }
 
-
-
--- {-| process some links
--- -}
--- stepRec : Int -> PathFinderState -> PathFinderState
--- stepRec steps state =
---   if steps <= 0 then state else
---   case Deque.popFront state.linksToInspect of
---     (Just route, remainingLinks) ->
---       processLink route {state | linksToInspect=remainingLinks}
---       |> stepRec (steps - 1)
-
---     _ -> state
 
 {-| pop the first n elements from the deque
 -}

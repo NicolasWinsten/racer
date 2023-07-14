@@ -24,11 +24,6 @@ import Log
 import Platform.Cmd as Cmd
 import WikiGraph
 
-{-| retrieve the content of a wikipedia page along with the current time when it is loaded
--}
-getPage : Title -> Cmd Msg
-getPage title = (PageFetch.getPage ClickedLink title)
-    |> Cmd.map (ReceivedMsgThatNeedsTime << LoadedPage title)
 
 {-| retrieve summary of a wikipedia article (thumbnail, description)
 to be displayed in the game lobby (and sent to the other players if hosting)
@@ -334,9 +329,12 @@ startGame game model =
             Just (path, _) -> currentPage (Left path)
             Nothing -> start.title
 
+        (pagefetcher, fetches) = PageFetch.fetchPage pageToGoTo
+
         phase = InGame (Left pageToGoTo) game
             { currentTime=Nothing
             , displayToc=False
+            , pagefetcher=pagefetcher
             }
             -- TODO have host provide initial wikigraph for late joining players
             (WikiGraph.init game.destinations {width=1000, height=500})
@@ -344,7 +342,7 @@ startGame game model =
 
     in model
         |> withPhase phase
-        |> andCmd (Cmd.batch [goBackToTop, getPage pageToGoTo])
+        |> andCmd (Cmd.batch [goBackToTop, Cmd.map PageFetchMsg fetches])
         |> withToast Toast.infoMessage "Race!"
         |> when game.amHost (startAIPathfinder start.title firstGoal.title)
         |> guardCmd game.amHost startGameSignal 
@@ -456,7 +454,7 @@ update msg ({phase} as model) =
 
         -- loaded page after clicking a link in game
         -- update the game state, signal peers about reaching the new title
-        MsgWithTime (LoadedPage _ (Ok page)) time -> case phase of
+        MsgWithTime (LoadedPage page) time -> case phase of
             InGame _ game opts wikigraph computer ->
                 let
                     self = game.self
@@ -507,13 +505,15 @@ update msg ({phase} as model) =
 
             _ -> doNothing
 
-        MsgWithTime (LoadedPage title (Err err)) _ -> doNothing
-            |> withToast Toast.errorMessage ("Request for title " ++ title ++ " failed: " ++ err)
+        -- MsgWithTime (LoadedPage err) _ -> doNothing
+        --     |> withToast Toast.errorMessage ("Request for title " ++ title ++ " failed: " ++ err)
 
         ClickedLink title -> case phase of
-            InGame _ game opts wikigraph computer -> model
-                |> withPhase (InGame (Left title) game opts wikigraph computer)
-                |> andCmd (getPage title)
+            InGame _ game opts wikigraph computer ->
+                let (fetcher, requests) = PageFetch.fetchPage title
+                in model
+                |> withPhase (InGame (Left title) game {opts | pagefetcher=fetcher} wikigraph computer)
+                |> andCmd (Cmd.map PageFetchMsg requests)
 
             _ -> doNothing
 
@@ -792,10 +792,23 @@ update msg ({phase} as model) =
                     |> Maybe.withDefault identity
 
             in doAiWork (model, Cmd.none)
+
+        PageFetchMsg fetcherMsg -> case phase of
+            InGame page game opts wikigraph pathfinder ->
+                case PageFetch.onMsg fetcherMsg opts.pagefetcher ClickedLink of
+                    Left fetcher -> model
+                        |> withPhase
+                            (InGame page game {opts | pagefetcher=fetcher} wikigraph pathfinder)
+                    Right (Ok parsedPage) -> applyUpdate
+                        (ReceivedMsgThatNeedsTime (LoadedPage parsedPage))
+                        (model, Log.info "parsed document")
+                    Right (Err err) -> doNothing
+                        |> withToast Toast.errorMessage err
+            
+            _ -> doNothing
                     
             
 {-| subscribe to animation frames if the ai pathfinder has work to do
-    or the wikigraph force layout has work to do
 -}
 animationFrame : Model -> Sub Msg
 animationFrame model =

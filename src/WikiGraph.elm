@@ -28,6 +28,7 @@ import TypedSvg.Types exposing (..)
 import Dict.Extra
 import Html.Events exposing (onMouseEnter)
 import Html.Events exposing (onMouseLeave)
+import Html.Attributes
 import Maybe.Extra
 import TypedSvg.Types exposing (FontWeight(..))
 import Zoom
@@ -80,6 +81,9 @@ nodeId n = case n of
   Destination title ->      (title,"",0)
   PathNode {title, goal} -> (title, goal, 0)
   Label (title, goal, _) -> (title, goal, 1)
+
+
+
 
 type alias Node = Force.Entity NodeId { data : NodeData, visitors : Set PeerId }
 
@@ -266,7 +270,7 @@ newSimulation : Int -> WikiGraph -> Force.State NodeId
 newSimulation numIterations graph =
   let
 
-    linkDistance = 30
+    linkDistance = 40
 
     configLink distance strength (source,target) =
       {source=source,target=target,distance=distance,strength=strength}
@@ -468,7 +472,9 @@ setAlpha a color =
 
 hideAlpha = 0.1
 
+edgeThickness = 5
 
+destinationNodeRadius = 20
 
 {-| for each edge in the wikigraph, color it according to all the players that have used it
 -}
@@ -494,22 +500,20 @@ svgEdge (WikiGraphState {graph}) colormap edge =
 coloredPath : List Color -> Pos a -> Pos b -> Svg msg
 coloredPath colors source target =
     let
-        portionThickness : Float
-        portionThickness = 3
         mkLine i color =
             line
-                [ AInPx.strokeWidth portionThickness
+                [ AInPx.strokeWidth edgeThickness
                 , A.stroke <| Paint <| color
                 , AInPx.x1 0
-                , AInPx.y1 <| (toFloat i)*portionThickness + portionThickness/2
+                , AInPx.y1 <| (toFloat i)*edgeThickness + edgeThickness/2
                 , AInPx.x2 100
-                , AInPx.y2 <| (toFloat i)*portionThickness + portionThickness/2
+                , AInPx.y2 <| (toFloat i)*edgeThickness + edgeThickness/2
                 ]
                 []
         -- scale the path to match the distance between points
         scale = Scale (dist source target / 100) 1
 
-        totalThickness = (toFloat <| List.length colors)*portionThickness
+        totalThickness = (toFloat <| List.length colors)*edgeThickness
         -- start line at the source point centered on middle of line
         translate = Translate source.x (source.y - totalThickness/2)
 
@@ -519,11 +523,6 @@ coloredPath colors source target =
 
     in g [ A.class ["links"], A.transform [rotation, translate, scale] ]
         <| List.indexedMap mkLine colors
-
-
-pathNodeRadius = 3
-playerLocationNodeRadius = 5
-destinationNodeRadius = 10
 
 {-| render a destination node as its thumbnail in a circle
 -}
@@ -574,6 +573,7 @@ svgNode (WikiGraphState {graph, highlightedNode}) colormap node =
         |> Dict.Extra.find (\player nodeid -> nodeid == node.id)
         |> Maybe.andThen (\(player, _) -> Dict.get player colormap)
 
+      highlighted = highlightedNode == Just node.id
       transparent = False -- TODO use this to highlight a particular player path
 
       fillcolor = Maybe.withDefault Color.black playercolor
@@ -589,8 +589,9 @@ svgNode (WikiGraphState {graph, highlightedNode}) colormap node =
 
       radius =
         if isDestination then destinationNodeRadius
-        else if playerIsHere then playerLocationNodeRadius
-        else pathNodeRadius
+        else Set.size node.visitors * edgeThickness
+          |> toFloat >> (*) 0.5
+          |> when (highlighted || playerIsHere) ((*) 2)
 
       -- the labels' angles are determined by the force layout using dummy nodes
       labelAnchor = Dict.get node.id graph.labelAnchors
@@ -614,7 +615,7 @@ svgNode (WikiGraphState {graph, highlightedNode}) colormap node =
         let maxChars = 20
         in
         if String.length nodeTitle <= maxChars
-          || highlightedNode == Just node.id
+          || highlighted
         then
           nodeTitle
         else
@@ -634,6 +635,8 @@ svgNode (WikiGraphState {graph, highlightedNode}) colormap node =
           , A.dominantBaseline DominantBaselineMiddle
           , onMouseEnter (HoveredWikiGraphNode <| Just node.id)
           , onMouseLeave (HoveredWikiGraphNode Nothing)
+          , Html.Attributes.style "text-decoration"
+              (if highlighted then "underline" else "none")
           ]
           [text clampedLabel]
         else
@@ -645,6 +648,13 @@ svgNode (WikiGraphState {graph, highlightedNode}) colormap node =
           {url=src.src, width=src.width, height=src.height, radius=radius, radiusColor=fillcolor}
           node nodeTitle
         Nothing ->
+          if isDestination then
+            mkPictureNode
+            { url="https://upload.wikimedia.org/wikipedia/en/8/80/Wikipedia-logo-v2.svg"
+            , width=100, height=100, radius=radius, radiusColor=fillcolor
+            }
+            node nodeTitle
+          else
           circle
             [ AInPx.r radius
             , A.fill <| Paint fillcolor
