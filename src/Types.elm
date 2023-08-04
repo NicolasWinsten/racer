@@ -18,7 +18,7 @@ type alias Title = String
 {-| ignore the wikipedia pages from these namespaces
 -}
 unwantedNamespaces =
-    [ "File", "Special", "Wikipedia", "Category", "Talk", "Help", "Template", "Template talk", "Wikipedia talk", "Portal" ]
+    [ "File", "Special", "Wikipedia", "Category", "Talk", "Help", "Template", "Template talk", "Wikipedia talk", "Portal", "Wikt" ]
 
 isArticleNamespace : String -> Bool
 isArticleNamespace title = List.all (\ns -> not <| String.startsWith (ns ++ ":") title) unwantedNamespaces
@@ -28,7 +28,7 @@ type alias Section = { level : Int, anchor : String}
 
 {-| loaded page that a user can view and click links on
 -}
-type alias Page msg = {title : Title, content : Html msg, sections : List Section }
+type alias Page msg = {title : Title, sections : List Section, content : Html msg}
 
 
 type alias PagePreview =
