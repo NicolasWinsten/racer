@@ -290,12 +290,12 @@ newSimulation numIterations graph =
 
     -- to layout the labels for each node nicely, we have an extra "label node" for each real node
     labelEdges = Dict.keys graph.nodes
-      |> List.map (\id -> configLink (linkDistance*0.75) Nothing (id, mkLabelId id))
+      |> List.map (\id -> configLink linkDistance Nothing (id, mkLabelId id))
     labelNodes = List.map .target labelEdges
 
     forces =
       [ Force.customLinks 5 <| danglingDestLinks ++ dummyLinks ++ edgeLinks ++ labelEdges
-      , Force.manyBody <| Dict.keys graph.nodes ++ labelNodes
+      , Force.manyBodyStrength -60 <| Dict.keys graph.nodes ++ labelNodes
       , Force.center graph.center.x graph.center.y
       ]
   in Force.iterations numIterations (Force.simulation forces)

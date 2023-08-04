@@ -23,6 +23,7 @@ import PathFinder
 import Log
 import Platform.Cmd as Cmd
 import WikiGraph
+import Json.Decode
 
 
 {-| retrieve summary of a wikipedia article (thumbnail, description)
@@ -227,13 +228,13 @@ getWikiGraph phase = case phase of
     PostGameReview _ wikigraph _ -> Just wikigraph
     _ -> Nothing
 
-setWikiGraph : WikiGraph.WikiGraphState -> ModelCmd -> ModelCmd
-setWikiGraph wg (({phase}, _) as model) =
-    let
+updateWikiGraph : (Maybe WikiGraph.WikiGraphState -> Maybe WikiGraph.WikiGraphState) -> ModelCmd -> ModelCmd
+updateWikiGraph f (({phase}, _) as model) =
+    let fromWg wg = Just wg |> f |> Maybe.withDefault wg
         newphase = case phase of
-            Welcome options -> Welcome {options | wikigraph=Just wg}
-            InGame page game opts _ computer -> InGame page game opts wg computer
-            PostGameReview game _ computer -> PostGameReview game wg computer
+            Welcome options -> Welcome {options | wikigraph=f options.wikigraph}
+            InGame page game opts wikigraph computer -> InGame page game opts (fromWg wikigraph) computer
+            PostGameReview game wikigraph computer -> PostGameReview game (fromWg wikigraph) computer
             Lobby _ _ -> phase
     in setPhase newphase model
     
@@ -259,23 +260,16 @@ getPlayers ({phase}, _) = case phase of
     PostGameReview game _ _ -> Just (postGamePlayers game)
     Welcome _ -> Nothing
 
-
--- updateWikiGraph : (WikiGraphState -> WikiGraphState) -> ModelCmd -> ModelCmd
--- updateWikiGraph f (({phase}, _) as model) =
---     case Maybe.map f (getWikiGraph phase) of
---         Just newGraph -> model
---             |> setWikiGraph newGraph
---         Nothing -> model
-
 {-| update the model based on the last move of the computer, and signal peers of the computer move
 -}
 handleAiMove : Either IncompleteLeg CompleteLeg -> Time.Posix -> ModelCmd -> ModelCmd
 handleAiMove leg time (({phase}, _) as model) =
-    let -- signal peers about the computer move
+    let computerFinishedLeg = Either.isRight leg
+        -- signal peers about the computer move
         handleDuringGame = model
             |> setPhase (applyPlayerMove "computer" leg time phase)
             |> andCmd (PeerPort.broadcast <| PeerPort.PlayerLegUpdate "computer" leg time)
-            |> when (Either.isRight leg) restartPathFinder
+            |> when computerFinishedLeg restartPathFinder
 
         -- if the computer finished the current leg, start the pathfinder on the next leg
         restartPathFinder modelcmd =
@@ -442,7 +436,9 @@ update msg ({phase} as model) =
                             |> withPhase (Welcome {opts | displayPages=newDisplayPages})
                             |> when (left.title /= right.title) (startAIPathfinder left.title right.title)
                             |> when (left.title /= right.title)
-                                (setWikiGraph <| WikiGraph.init (DestinationList left right []) {width=1000, height=400})
+                                (updateWikiGraph <| always <| Just <|
+                                    WikiGraph.init (DestinationList left right []) {width=1000, height=400}
+                                )
                             
                         _ -> withPhase (Welcome {opts | displayPages=newDisplayPages}) model
 
@@ -765,9 +761,8 @@ update msg ({phase} as model) =
                 
 
         -- updated force layout on wikigraph or the user is manipulating the graph's svg
-        WikiGraphMsg wikigraphMsg -> case getWikiGraph model.phase of
-            Just graph -> setWikiGraph (WikiGraph.onMsg wikigraphMsg graph) (model, Cmd.none)
-            Nothing -> doNothing
+        WikiGraphMsg wikigraphMsg -> (model, Cmd.none)
+            |> updateWikiGraph (Maybe.map (WikiGraph.onMsg wikigraphMsg))
             
         
         ToastMsg toastMsg ->
@@ -801,10 +796,20 @@ update msg ({phase} as model) =
                             (InGame page game {opts | pagefetcher=fetcher} wikigraph pathfinder)
                     Right (Ok parsedPage) -> applyUpdate
                         (ReceivedMsgThatNeedsTime (LoadedPage parsedPage))
-                        (model, Log.info "parsed document")
+                        (model, Cmd.none)
                     Right (Err err) -> doNothing
                         |> withToast Toast.errorMessage err
             
+            _ -> doNothing
+
+        KeyPressed key -> case key of
+            "r" -> case phase of 
+                Welcome _-> (model, Cmd.none)
+                    |> updateWikiGraph (Maybe.map <| WikiGraph.reheat forceItersPostGame)
+                PostGameReview _ _ _  -> (model, Cmd.none)
+                    |> updateWikiGraph (Maybe.map <| WikiGraph.reheat forceItersPostGame)
+
+                _ -> doNothing
             _ -> doNothing
                     
             
@@ -831,6 +836,7 @@ subscriptions model =
             , Sub.map PeerMsg PeerPort.receiveData
             , animationFrame model
             , wikiGraphSub
+            , Browser.Events.onKeyPress (Json.Decode.map KeyPressed <| Json.Decode.field "key" Json.Decode.string)
             ]
     in
     case model.phase of

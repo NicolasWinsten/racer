@@ -166,9 +166,9 @@ fetchHtml title = Http.get
 -}
 
 type PageFetcher
-    = Fetching Title
-    | HasResolution Title Resolution
-    | HasDocument Title String
+    = Fetching
+    | HasResolution Resolution
+    | HasDocument String
 
 type Msg
     = GotResolution (Result String Resolution)
@@ -177,7 +177,7 @@ type Msg
 
 fetchPage : Title -> (PageFetcher, Cmd Msg)
 fetchPage title =
-    ( Fetching title
+    ( Fetching
     , Cmd.batch
         [ Cmd.map GotDocument (fetchHtml title)
         , Cmd.map GotResolution (resolveTitle title)
@@ -189,22 +189,22 @@ type alias PageHtml = {title : Title, sections : List Section, html : String}
 onMsg : Msg -> PageFetcher -> (Title -> msg) -> Either PageFetcher (Result String (Page msg))
 onMsg msg fetcher linkClickMsg = case msg of
     GotDocument (Ok html) -> case fetcher of
-        Fetching title ->
-            Left <| HasDocument title html
-        HasResolution _ {title, sections} ->
+        Fetching ->
+            Left <| HasDocument html
+        HasResolution {title, sections} ->
             Right <| parseDocument linkClickMsg (PageHtml title sections html)
         
-        HasDocument _ _ -> Left fetcher
+        HasDocument _ -> Left fetcher
     
     GotDocument (Err err) -> Right (Err err)
 
     GotResolution (Ok resolution) -> case fetcher of
-        Fetching title -> Left <| HasResolution title resolution
+        Fetching -> Left <| HasResolution resolution
 
-        HasDocument title html ->
+        HasDocument html ->
             Right <| parseDocument linkClickMsg (PageHtml resolution.title resolution.sections html)
         
-        HasResolution _ _ -> Left fetcher
+        HasResolution _ -> Left fetcher
     
     GotResolution (Err err) -> Right (Err err)
 

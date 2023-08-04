@@ -18,18 +18,13 @@ import List.Extra
 
 {-|
 
-Provided is AI logic that will connect to wikipedia articles
+Provided is AI logic that will connect two wikipedia articles
 
 The AI will follow titles that appear in the goal page's html frequently
 and will rank pages based on their overlap of wikilinks with the goal page.
 
 This module is structured such that external code can run this pathfinder using a stepper
 (So that it can be paired with requestAnimationFrame for example)
-
-
-TODO for obscure goal pages, this AI will not be able to find it. To remedy this problem,
-  we could allow the AI to use the API to fetch some random backlinks of the goal page to help close the gap
-  (one of the backlink pages will surely be more popular and easier to find)
 -}
 
 
@@ -64,7 +59,8 @@ type LinkToFetch = LinkToFetch
 titleOf : LinkToFetch -> Title
 titleOf (LinkToFetch {title}) = title
 
-
+{-| debug string to help understand the calculated priority of a link
+-}
 fetchLinkToString : LinkToFetch -> String
 fetchLinkToString (LinkToFetch {title, parent, stats, priority}) =
   let
@@ -177,8 +173,8 @@ gatherLinkStats {link, goal} =
         else 0
 
       overlap =
-        let t = getBaseTitle link.title
-            g = getBaseTitle goal.title
+        let (t,_) = splitDisamb link.title
+            (g,_) = splitDisamb goal.title
         in
         if String.length t > 5 && String.length g > 5 then
           max (overlapAmount t g) (overlapAmount g t)
@@ -228,22 +224,17 @@ countTitleOccurrences : Title -> String -> Int
 countTitleOccurrences title text =
   let
     (base, disamb) = splitDisamb title
-    target = base -- idk why adding the space helps so much, too lazy to investigate
+    target = base
 
     disambOccurrences = case disamb of
-      Just tag -> countTitleOccurrences tag text
+      Just tag -> countOccurrences tag text
       Nothing -> 0
 
     dontCountOccurrences =
-          String.startsWith "." base -- avoid high level domains like .com or .wiki
-          --|| List.member base ["Wikipedia", "Wikimedia", "Wikisource", "Wikidata"] -- these show up on every page basically
-          || String.length base < 6 -- title should be distinct enough so that we don't get a lot of false positives
+          String.length base < 6 -- title should be distinct enough so that we don't get a lot of false positives
           || (Maybe.Extra.isJust disamb && disamb /= Just "disambiguation" && disambOccurrences == 0)
     
-    -- should we count the occurrences of the disambiguation tag?
-
-  in (if dontCountOccurrences then 0 else countOccurrences target text + (disambOccurrences // 10))
-  -- + (disambOccurrences // 10)
+  in if dontCountOccurrences then 0 else countOccurrences target text
 
 
 -- rather than getHTML we should get the wikitext since it is smaller
@@ -312,6 +303,8 @@ makeRequests state =
     numRequests = requestsAvailableToMake state
     (pagesToFetch, remainingLinks) = dequeue numRequests state.linksToFetch
     -- TODO parameterize pathfinder with a log level
+
+    -- TODO if all links have priority zero, then choose the ones with the biggest linkset
     logs = List.map Log.info
           <| List.map fetchLinkToString
           <| Tuple.first
@@ -340,8 +333,8 @@ processLink lead state =
     let
       stats = gatherLinkStats {link=lead, goal=state.goal}
       priority =
-        if lead.title == state.goal.title then
-          Basics.Extra.maxSafeInteger
+        if lead.title == state.goal.title then Basics.Extra.maxSafeInteger
+        else if isTroubleTitle lead.title then 0
         else calculatePriority stats
     in 
     { state
@@ -365,13 +358,11 @@ processLink lead state =
 processArticle : IncompleteLeg -> Article -> PathFinderState -> PathFinderState
 processArticle route page state =
   let
-    -- linkSet = linkSetFromList <| List.filter isCandidate <| getLinksOnHtml html
-    -- linkSet = {set=page.links, size=Set.size page.links}
     linksOnArticle = getLinksOnWikiText page.wikitext
     linkSet = Set.fromList linksOnArticle
     visitedTitleSet = Set.insert page.title state.visited
     shouldFollow link = (not <| Set.member link visitedTitleSet)
-      && (isCandidate link)
+      && isArticleNamespace link
 
     articleStats = gatherArticleStats
       { titleText=page.wikitext
@@ -383,7 +374,7 @@ processArticle route page state =
   in
   {state
   | visited=Set.union linkSet visitedTitleSet
-  , linksToInspect=List.foldl
+  , linksToInspect=List.foldr
       (\link -> 
         if shouldFollow link then Deque.pushBack
           {title=link, resolvedPath=route, parent=page, parentStats=articleStats}
@@ -500,35 +491,22 @@ splitDisamb title =
     Just (Just base :: disamb :: _) -> (base, disamb)
     _ -> (title, Nothing)
     
-
-
-{-| remove the disambiguating tag from a title
-
-ISBN (identifier) -> ISBN
--}
-dropDisambTag : Title -> Title
-dropDisambTag = splitDisamb >> Tuple.first 
-
-{-| drop the 
+{-| drop an internal reference
 -}
 dropInternalHref : Title -> Title
 dropInternalHref title = case String.split "#" title of
   t :: _ -> String.trim t
   _ -> title
 
-
-getBaseTitle : Title -> Title
-getBaseTitle = dropDisambTag
-
 {-| some links are bad to follow, so ignore them
 -}
-isCandidate : Title -> Bool
-isCandidate title =
+isTroubleTitle : Title -> Bool
+isTroubleTitle title =
   let
-    baseTitle = getBaseTitle title
+    (baseTitle, disamb) = splitDisamb title
 
-    hasMinimumLength =
-        String.length baseTitle > 1
+    tooShort =
+        String.length baseTitle <= 1
 
     isBlacklisted =
         List.member (String.toLower baseTitle)
@@ -548,9 +526,15 @@ isCandidate title =
             , "Virtual International Authority File"
             , "Integrated Authority File"
             , "Geographic coordinate system"
+            , "Google"
+            , "United States"
+            , "Cambridge"
             ]
-  in
-  hasMinimumLength && not isBlacklisted
+
+    blacklistedDisamb = List.member disamb <|
+      List.map Just ["journal", "magazine"]
+
+  in tooShort || isBlacklisted || blacklistedDisamb
 
 
 getLinksOnWikiText : String -> List Title

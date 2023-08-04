@@ -73,4 +73,5 @@ type Msg
     | DisplayToc Bool
     | ReceivedMsgThatNeedsTime TimeDependentMsg
     | MsgWithTime TimeDependentMsg Time.Posix
+    | KeyPressed String
     | NoOp
