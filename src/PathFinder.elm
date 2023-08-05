@@ -96,6 +96,7 @@ prune num q =
   let (items, _) = dequeue num q
   in PQ.fromList comparator items
 
+
 type alias PathFinderState =
   { goal : Article
   , visited : Set Title
@@ -112,6 +113,7 @@ type alias PathFinderState =
   , pendingRequestLimit : Int
   , pendingRequests : Dict Title LinkToFetch
     -- track the pages requested (this allows me to easily ignore stale api requests)
+  , verbose : Bool
   }
 
 
@@ -257,6 +259,7 @@ initPathFinder {start, goal, pendingRequestLimit, totalRequestLimit} =
   , linksToInspect=Deque.empty
   , pendingRequestLimit=pendingRequestLimit
   , pendingRequests=Dict.empty
+  , verbose=False
   } |> processArticle (initLeg start.title goal.title) start
 
 
@@ -302,13 +305,11 @@ makeRequests state =
   let
     numRequests = requestsAvailableToMake state
     (pagesToFetch, remainingLinks) = dequeue numRequests state.linksToFetch
-    -- TODO parameterize pathfinder with a log level
-
-    -- TODO if all links have priority zero, then choose the ones with the biggest linkset
-    logs = List.map Log.info
+    logLinks = List.map Log.info
           <| List.map fetchLinkToString
           <| Tuple.first
-          <| dequeue 10 state.linksToFetch 
+          <| dequeue 10 state.linksToFetch
+    
   in
     ( { state
       | linksToFetch=prune 10 remainingLinks
@@ -322,7 +323,7 @@ makeRequests state =
       Cmd.batch
         [ (Log.info <| "Pathfinder requesting articles " ++ String.join ", " pages)
         , Cmd.batch (List.map getTextOfLink pages)
-        , Cmd.batch logs
+        , if state.verbose then Cmd.batch logLinks else Cmd.none
         ]
     )
 
